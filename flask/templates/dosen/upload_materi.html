@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+
+{% block title %}Upload Materi{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-lg-9 col-md-11">
+            <a href="{{ url_for('materi') }}" class="btn btn-outline-secondary mb-3"><i class="fas fa-arrow-left me-2"></i>Kembali ke Daftar Materi</a>
+            <div class="card shadow-sm">
+                <div class="card-header py-3">
+                    <h4 class="mb-0"><i class="fas fa-upload text-primary me-2"></i>Upload Materi Baru</h4>
+                </div>
+                <div class="card-body p-4">
+                    <form method="POST" action="{{ url_for('upload_materi') }}" enctype="multipart/form-data">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="title" class="form-label fw-bold">Judul Materi *</label>
+                                <input type="text" class="form-control" id="title" name="title" placeholder="Contoh: Modul 1 - Pengenalan Database" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="id_kelas" class="form-label fw-bold">Pilih Kelas *</label>
+                                <select class="form-select" id="id_kelas" name="id_kelas" required>
+                                    <option value="" selected disabled>-- Alokasikan ke Kelas --</option>
+                                    {% for kelas in kelas_list %}
+                                    <option value="{{ kelas.id_kelas }}">{{ kelas.nama_kelas }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label for="content" class="form-label fw-bold">Deskripsi Singkat</label>
+                                <textarea class="form-control" id="content" name="content" rows="4" placeholder="Jelaskan secara singkat isi dari materi ini..."></textarea>
+                            </div>
+                            <div class="col-12">
+                                <label for="file" class="form-label fw-bold">File Materi (Opsional)</label>
+                                <input class="form-control" type="file" id="file" name="file">
+                                <div class="form-text">Format yang didukung: pdf, doc, docx, ppt, pptx. Ukuran maks: 16MB.</div>
+                            </div>
+                        </div>
+                        <hr class="my-4">
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="{{ url_for('materi') }}" class="btn btn-secondary">Batal</a>
+                            <button type="submit" class="btn btn-primary px-4"><i class="fas fa-save me-2"></i>Simpan Materi</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

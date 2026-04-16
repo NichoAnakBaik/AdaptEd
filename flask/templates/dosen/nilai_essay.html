@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+
+{% block title %}Periksa Jawaban Kuis{% endblock %}
+
+{% block content %}
+<style>
+    .answer-card {
+        border-left: 4px solid var(--primary);
+    }
+    .correct-answer {
+        background-color: #d1e7dd; /* Success light */
+        border-color: #198754;   /* Success */
+    }
+    .wrong-answer {
+        background-color: #f8d7da; /* Danger light */
+        border-color: #dc3545;   /* Danger */
+    }
+</style>
+
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-lg-9">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h2 mb-0"><i class="fas fa-marker text-primary me-2"></i>Periksa Jawaban Kuis</h1>
+                    <p class="text-muted mb-0">Memberikan penilaian untuk kuis: <strong>{{ kuis.judul }}</strong></p>
+                </div>
+                <a href="{{ url_for('lihat_kuis', id_kuis=kuis.id_kuis) }}" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-2"></i>Kembali</a>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6"><strong>Mahasiswa:</strong> {{ mahasiswa.nama }}</div>
+                        <div class="col-md-6"><strong>NIM:</strong> {{ mahasiswa.NIM }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <form method="POST" action="{{ url_for('nilai_essay', id_kuis=kuis.id_kuis, nim=mahasiswa.NIM) }}">
+                {% for jawaban in jawaban_list %}
+                <div class="card shadow-sm mb-3 answer-card">
+                    <div class="card-header bg-light">
+                        <strong>Pertanyaan #{{ loop.index }}:</strong> {{ jawaban.teks_pertanyaan }}
+                    </div>
+                    <div class="card-body">
+                        {% if jawaban.jenis == 'pilihan_ganda' %}
+                            <p><strong>Jawaban Mahasiswa:</strong></p>
+                            <div class="alert {{ 'alert-success' if jawaban.nilai == 100 else 'alert-danger' }}">
+                                {{ jawaban.jawaban_pg_teks or 'Tidak dijawab' }}
+                                {% if jawaban.nilai == 100 %}
+                                    <i class="fas fa-check-circle text-success ms-2"></i> (Benar)
+                                {% else %}
+                                    <i class="fas fa-times-circle text-danger ms-2"></i> (Salah)
+                                {% endif %}
+                            </div>
+                            <p class="mb-0"><strong>Kunci Jawaban:</strong> {{ jawaban.jawaban_benar_teks }}</p>
+                        
+                        {% elif jawaban.jenis == 'essay' %}
+                            <div class="mb-3">
+                                <label class="form-label"><strong>Jawaban Mahasiswa:</strong></label>
+                                <textarea class="form-control" rows="4" readonly>{{ jawaban.jawaban_teks or 'Tidak dijawab' }}</textarea>
+                            </div>
+                            <div class="row align-items-center">
+                                <div class="col-md-4">
+                                    <label for="nilai_{{ jawaban.id_pertanyaan }}" class="form-label fw-bold">Beri Nilai (0-100):</label>
+                                </div>
+                                <div class="col-md-4">
+                                    <input type="number" class="form-control" 
+                                           id="nilai_{{ jawaban.id_pertanyaan }}" 
+                                           name="nilai_{{ jawaban.id_pertanyaan }}" 
+                                           value="{{ jawaban.nilai if jawaban.nilai is not none else '0' }}" 
+                                           min="0" max="100" step="1">
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+
+                <div class="d-flex justify-content-end mt-4">
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="fas fa-save me-2"></i> Simpan Penilaian & Hitung Nilai Akhir
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

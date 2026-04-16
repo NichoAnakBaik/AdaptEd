@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+
+{% block title %}Daftar Kuis{% endblock %}
+
+{% block content %}
+<style>
+    /* Style untuk kartu kuis */
+    .card-kuis { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .card-kuis:hover { transform: translateY(-5px); box-shadow: 0 10px 25px rgba(0,0,0,.1); }
+    .card-header-custom { background: linear-gradient(45deg, var(--primary), var(--primary-dark)); color: #fff; padding: 1.25rem; border-radius: 14px 14px 0 0; }
+    .info-item { display: flex; align-items: center; gap: .75rem; background-color: #f8f9fa; padding: .75rem; border-radius: 8px; }
+    .info-item .icon { font-size: 1.2rem; color: var(--primary); }
+    .info-item .label { font-size: .85rem; color: var(--gray); }
+    .info-item .value { font-weight: 600; color: var(--dark); }
+    .card-kuis .card-footer { background-color: transparent; border-top: 1px solid #e9ecef; padding: 1rem 1.25rem; margin-top: auto; }
+    .animate-on-scroll { opacity: 0; transform: translateY(20px); transition: opacity .6s ease-out, transform .6s ease-out; }
+    .animate-on-scroll.visible { opacity: 1; transform: translateY(0); }
+    .hover-bg-light:hover { background-color: #f8f9fa; cursor: pointer; }
+</style>
+
+<div class="container-fluid">
+    <div id="quiz-list-view">
+        <h1 class="h2 mb-4"><i class="fas fa-pencil-alt text-primary me-2"></i>Kuis Tersedia</h1>
+        <div class="row">
+            {% if kuis_list %}
+                {% for kuis in kuis_list %}
+                <div class="col-lg-4 col-md-6 mb-4 animate-on-scroll">
+                    <div class="card card-kuis h-100 d-flex flex-column">
+                        <div class="card-header-custom">
+                            <h5 class="card-title mb-0 text-white">{{ kuis.judul }}</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <div class="info-item"><i class="fas fa-question-circle icon"></i>
+                                        <div>
+                                            <div class="label">Jumlah Soal</div>
+                                            <div class="value">{{ kuis.jumlah_pertanyaan }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="info-item"><i class="fas fa-user-tie icon"></i>
+                                        <div>
+                                            <div class="label">Dosen</div>
+                                            <div class="value">{{ kuis.nama_dosen }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {% if kuis.status_pengerjaan %}
+                                <div class="alert alert-success small py-2 text-center">
+                                    <i class="fas fa-check-circle me-1"></i> Selesai | Nilai: <strong>{{ "%.2f"|format(kuis.nilai_total) if kuis.nilai_total is not none else 'Menunggu Penilaian' }}</strong>
+                                </div>
+                            {% else %}
+                                <div class="alert alert-info small py-2 text-center">
+                                   <i class="fas fa-info-circle me-1"></i> Siap untuk dikerjakan.
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="card-footer">
+                             {% if kuis.status_pengerjaan %}
+                                <button class="btn btn-light w-100" disabled><i class="fas fa-check-circle"></i> Telah Dikerjakan</button>
+                            {% else %}
+                                <button class="btn btn-primary w-100 js-start-quiz-btn"
+                                        data-quiz-id="{{ kuis.id_kuis }}"
+                                        data-quiz-title="{{ kuis.judul | e }}"
+                                        data-quiz-duration="{{ kuis.durasi }}">
+                                    <i class="fas fa-play me-2"></i>Mulai Kuis
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="col-12"><div class="alert alert-secondary text-center">Belum ada kuis yang tersedia untuk Anda saat ini.</div></div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div id="quiz-taking-view" style="display: none;"></div>
+
+    <div class="modal fade" id="resultModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered"><div class="modal-content" style="border-radius:15px"><div class="modal-header bg-success text-white"><h5 class="modal-title"><i class="fas fa-trophy me-2"></i>Hasil Kuis</h5></div><div class="modal-body text-center" id="result-content" style="padding:2rem"></div><div class="modal-footer"><button type="button" class="btn btn-primary js-back-to-list-btn"><i class="fas fa-redo me-2"></i>Kembali ke Daftar Kuis</button></div></div></div>
+    </div>
+</div>
+
+<script>
+class QuizSystem{constructor(){this.resetState()}resetState(){this.currentQuizId=null,this.questions=[],this.answers={},this.currentQuestionIndex=0,this.timeRemaining=0,this.timerInterval&&clearInterval(this.timerInterval),this.timerInterval=null,this.isSubmitted=!1}async startQuiz(t,e,i,s){if(!confirm("Apakah Anda siap memulai kuis? Timer akan dimulai."))return;const n=s.innerHTML;s.disabled=!0,s.innerHTML='<span class="spinner-border spinner-border-sm"></span> Memuat...';try{const a=await fetch(`/api/kuis/${t}/soal`);if(!a.ok)throw new Error(`Gagal memuat soal (Status: ${a.status})`);const l=await a.json();if(!l.soal||0===l.soal.length)throw new Error("Kuis ini tidak memiliki soal.");this.resetState(),this.currentQuizId=t,this.questions=l.soal,this.questions.forEach(t=>{this.answers[t.id_soal]=null}),this.timeRemaining=60*parseInt(i),this.renderQuizUI(e),this.startTimer(),this.loadQuestion(0)}catch(o){console.error("Error starting quiz:",o),alert(`Tidak dapat memulai kuis: ${o.message}`)}finally{s.disabled=!1,s.innerHTML=n}}renderQuizUI(t){document.getElementById("quiz-list-view").style.display="none";const e=document.getElementById("quiz-taking-view");e.innerHTML=`
+<div class="row"><div class="col-md-12 mb-4"><div class="card shadow-sm"><div class="card-body d-flex justify-content-between align-items-center"><div><h4 id="quiz-title" class="mb-0">${t}</h4></div><div class="d-flex align-items-center"><div class="me-3 text-end"><small class="text-muted">Sisa Waktu</small><div id="quiz-timer" class="h4 mb-0 text-primary"><i class="fas fa-clock me-1"></i><span id="timer-display">00:00</span></div></div><div class="text-end"><small class="text-muted">Progress</small><div class="progress" style="width:150px;height:8px"><div id="quiz-progress" class="progress-bar"></div></div><small id="progress-text" class="text-muted">0/${this.questions.length}</small></div></div></div></div></div><div class="col-lg-3 order-lg-2"><div class="card shadow-sm sticky-top" style="top:20px"><div class="card-header"><h5 class="mb-0">Navigasi</h5></div><div class="card-body"><div id="question-navigation" class="d-grid gap-2"></div><hr><div class="d-grid gap-2"><button class="btn btn-success js-submit-quiz-btn"><i class="fas fa-paper-plane me-2"></i>Kirim</button><button class="btn btn-outline-danger js-exit-quiz-btn"><i class="fas fa-times me-2"></i>Keluar</button></div></div></div></div><div class="col-lg-9 order-lg-1"><div class="card shadow-sm"><div class="card-body p-4"><div id="question-container" style="min-height:300px"></div><div class="d-flex justify-content-between mt-4"><button id="prev-btn" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-2"></i>Sebelumnya</button><button id="next-btn" class="btn btn-primary">Selanjutnya<i class="fas fa-arrow-right ms-2"></i></button></div></div></div></div></div>`,e.style.display="block"}loadQuestion(t){if(t<0||t>=this.questions.length)return;this.currentQuestionIndex=t;const e=this.questions[t],i=document.getElementById("question-container");let s=`<div class="mb-4"><div class="d-flex justify-content-between align-items-center"><h5 class="mb-0">Soal ${t+1}</h5><span class="badge bg-primary">${"pilihan_ganda"===e.tipe?"Pilihan Ganda":"Esai"}</span></div></div>`;if(s+=`<div class="fs-5 mb-4">${e.pertanyaan}</div>`,"pilihan_ganda"===e.tipe){s+='<div class="vstack gap-2">';for(const n of e.opsi){const a=this.answers[e.id_soal]===n.id_opsi;s+=`
+<div class="form-check p-0" data-option-id="${n.id_opsi}" data-question-id="${e.id_soal}"><input class="form-check-input d-none" type="radio" name="q_${e.id_soal}" id="opt_${n.id_opsi}" ${a?"checked":""}><label class="form-check-label d-block p-3 border rounded ${a?"bg-primary text-white border-primary":"hover-bg-light"}" for="opt_${n.id_opsi}">${n.teks_opsi}</label></div>`}s+="</div>"}else{const l=this.answers[e.id_soal]||"";s+=`<div class="form-floating"><textarea class="form-control" placeholder="Ketik jawaban Anda" style="height:200px" data-question-id="${e.id_soal}">${l}</textarea><label>Jawaban Anda</label></div>`}i.innerHTML=s,this.updateNavigationButtons(),this.generateNavigation(),this.updateProgress()}generateNavigation(){const t=document.getElementById("question-navigation");if(!t)return;let e="";this.questions.forEach((i,s)=>{const n=null!==this.answers[i.id_soal]&&""!==this.answers[i.id_soal],a=s===this.currentQuestionIndex;let l=a?"btn-primary":n?"btn-success":"btn-outline-secondary";e+=`<button class="btn btn-sm ${l}" data-question-index="${s}">${s+1}</button>`}),t.innerHTML=e}updateNavigationButtons(){document.getElementById("prev-btn").disabled=0===this.currentQuestionIndex;const t=document.getElementById("next-btn");this.currentQuestionIndex===this.questions.length-1?(t.innerHTML='Kirim Jawaban <i class="fas fa-paper-plane ms-2"></i>',t.className="btn btn-success"):(t.innerHTML='Selanjutnya <i class="fas fa-arrow-right ms-2"></i>',t.className="btn btn-primary")}updateProgress(){const t=Object.values(this.answers).filter(t=>null!==t&&""!==t).length,e=t/this.questions.length*100;document.getElementById("quiz-progress").style.width=`${e}%`,document.getElementById("progress-text").textContent=`${t}/${this.questions.length}`}startTimer(){this.updateTimerDisplay(),this.timerInterval=setInterval(()=>{this.timeRemaining--,this.updateTimerDisplay(),this.timeRemaining<=0&&this.timeUp()},1e3)}updateTimerDisplay(){const t=Math.floor(this.timeRemaining/60),e=this.timeRemaining%60;document.getElementById("timer-display").textContent=`${t.toString().padStart(2,"0")}:${e.toString().padStart(2,"0")}`,this.timeRemaining<=60&&document.getElementById("quiz-timer").classList.replace("text-primary","text-danger")}timeUp(){clearInterval(this.timerInterval),alert("Waktu habis!"),this.submitQuiz(!0)}nextQuestion(){this.currentQuestionIndex<this.questions.length-1?this.loadQuestion(this.currentQuestionIndex+1):this.submitQuiz()}previousQuestion(){this.currentQuestionIndex>0&&this.loadQuestion(this.currentQuestionIndex-1)}selectOption(t,e){this.answers[t]=e,this.loadQuestion(this.currentQuestionIndex)}saveEssayAnswer(t,e){this.answers[t]=null===(e=e.trim())||""===e?null:e,this.generateNavigation(),this.updateProgress()}async submitQuiz(t=!1){document.querySelectorAll("#question-container textarea").forEach(e=>{const i=parseInt(e.dataset.questionId);this.answers[i]=null==e.value.trim()||""===e.value.trim()?null:e.value.trim()});if(this.isSubmitted)return;const e=Object.values(this.answers).filter(t=>null===t).length;if(e>0&&!t&&!confirm(`Masih ada ${e} soal belum dijawab. Yakin kirim?`))return;this.isSubmitted=!0,clearInterval(this.timerInterval);try{const i=await fetch(`/api/kuis/${this.currentQuizId}/submit`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({jawaban:this.answers})});if(!i.ok)throw new Error("Gagal mengirim jawaban");const s=await i.json();this.showResult(s)}catch(n){alert(`Tidak dapat mengirim jawaban: ${n.message}`),this.isSubmitted=!1}}showResult(t){const e=t.nilai,i=t.message,s=t.grade,n=t.badgeClass,a=null!==e?parseFloat(e).toFixed(2):"N/A";document.getElementById("result-content").innerHTML=`<h4>Nilai Anda: <span class="badge ${n} fs-5">${s}</span></h4><h1 class="display-3 my-3">${a}</h1><p class="text-muted">${i}</p>`,new bootstrap.Modal(document.getElementById("resultModal")).show()}exitQuiz(){confirm("Yakin keluar? Progress tidak akan disimpan!")&&this.backToQuizList()}backToQuizList(){window.location.reload()}
+}
+document.addEventListener("DOMContentLoaded",()=>{const t=new QuizSystem;document.body.addEventListener("click",e=>{const i=e.target,s=i.closest(".js-start-quiz-btn"),n=i.closest(".js-submit-quiz-btn"),a=i.closest(".js-exit-quiz-btn"),l=i.closest(".js-back-to-list-btn"),o=i.closest("#prev-btn"),c=i.closest("#next-btn"),r=i.closest("#question-navigation button"),d=i.closest(".form-check");s?t.startQuiz(s.dataset.quizId,s.dataset.quizTitle,s.dataset.quizDuration,s):n?t.submitQuiz():a?t.exitQuiz():l?t.backToQuizList():o?t.previousQuestion():c?t.nextQuestion():r?t.loadQuestion(parseInt(r.dataset.questionIndex,10)):d&&t.selectOption(parseInt(d.dataset.questionId),parseInt(d.dataset.optionId))}),document.body.addEventListener("change",e=>{if(e.target&&e.target.matches("textarea")){const i=parseInt(e.target.dataset.questionId),s=e.target.value;t.saveEssayAnswer(i,s)}});const e=new IntersectionObserver(t=>{t.forEach(t=>{t.isIntersecting&&t.target.classList.add("visible")})},{threshold:.1});document.querySelectorAll(".animate-on-scroll").forEach(t=>e.observe(t))});
+</script>
+{% endblock %}

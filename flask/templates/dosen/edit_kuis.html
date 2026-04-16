@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+{% block title %}Edit Kuis: {{ kuis.judul }}{% endblock %}
+
+{% block content %}
+<style>
+    /* Sedikit style agar tampilan lebih jelas */
+    .pertanyaan-item {
+        background-color: #f8f9fa;
+        border: 1px solid #e9ecef;
+        transition: box-shadow 0.2s;
+    }
+    .pertanyaan-item:focus-within {
+        box-shadow: 0 0 0 .25rem rgba(13,110,253,.25); /* Efek focus */
+    }
+    .opsi-ganda-container .input-group-text {
+        min-width: 45px;
+        justify-content: center;
+    }
+    .btn-hapus-item, .btn-hapus-item-existing {
+        cursor: pointer;
+    }
+</style>
+
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <h1 class="h2 mb-4"><i class="fas fa-edit text-primary me-2"></i>Edit Kuis</h1>
+
+            <form method="POST" action="{{ url_for('edit_kuis', id_kuis=kuis.id_kuis) }}">
+                
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header"><h5 class="mb-0">Informasi Kuis</h5></div>
+                    <div class="card-body">
+                        <div class="form-floating mb-3">
+                            <input type="text" class="form-control" id="judul" name="judul" value="{{ kuis.judul }}" required>
+                            <label for="judul">Judul Kuis</label>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6 form-floating">
+                                <input type="number" class="form-control" id="durasi" name="durasi" value="{{ kuis.durasi }}" required min="1">
+                                <label for="durasi" class="ms-2">Durasi (menit)</label>
+                            </div>
+                            <div class="col-md-6 form-floating">
+                                <select class="form-select" id="status" name="status">
+                                    <option value="aktif" {% if kuis.status == 'aktif' %}selected{% endif %}>Aktif</option>
+                                    <option value="nonaktif" {% if kuis.status == 'nonaktif' %}selected{% endif %}>Nonaktif</option>
+                                </select>
+                                <label for="status" class="ms-2">Status</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm">
+                    <div class="card-header"><h5 class="mb-0">Daftar Pertanyaan</h5></div>
+                    <div class="card-body" id="container-pertanyaan">
+                        
+                        {% for pertanyaan in pertanyaan_list %}
+                        <div class="pertanyaan-item p-3 mb-3 rounded" id="pertanyaan-{{ pertanyaan.id_pertanyaan }}">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span class="fw-bold">Pertanyaan #{{ loop.index }}</span>
+                                <a href="{{ url_for('hapus_pertanyaan', id_pertanyaan=pertanyaan.id_pertanyaan) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Yakin ingin menghapus pertanyaan ini dari database?')"><i class="fas fa-trash"></i> Hapus</a>
+                            </div>
+                            <textarea class="form-control mb-2" name="pertanyaan_{{ pertanyaan.id_pertanyaan }}_teks" rows="2" placeholder="Tulis teks pertanyaan">{{ pertanyaan.teks_pertanyaan }}</textarea>
+                            
+                            {% if pertanyaan.jenis == 'pilihan_ganda' %}
+                            <div class="opsi-ganda-container mt-3">
+                                {% for pilihan in pertanyaan.pilihan_list %}
+                                <div class="input-group mb-2">
+                                    <div class="input-group-text">
+                                        <input class="form-check-input mt-0" type="radio" name="pertanyaan_{{ pertanyaan.id_pertanyaan }}_jawaban" value="{{ loop.index0 }}" {% if pilihan.is_jawaban_benar == 1 %}checked{% endif %} required>
+                                    </div>
+                                    <input type="text" class="form-control" name="pertanyaan_{{ pertanyaan.id_pertanyaan }}_pilihan_{{ loop.index0 }}" value="{{ pilihan.teks_pilihan }}" placeholder="Teks Pilihan {{ loop.index }}">
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="card-footer text-center">
+                        <button type="button" id="btn-tambah-pg" class="btn btn-outline-primary"><i class="fas fa-plus-circle me-1"></i> Tambah Pilihan Ganda</button>
+                        <button type="button" id="btn-tambah-esai" class="btn btn-outline-secondary"><i class="fas fa-plus-circle me-1"></i> Tambah Esai</button>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end gap-2 mt-4">
+                    <a href="{{ url_for('lihat_kuis', id_kuis=kuis.id_kuis) }}" class="btn btn-secondary">Batal</a>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i> Simpan Semua Perubahan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<template id="template-pertanyaan-pg">
+    <div class="pertanyaan-item p-3 mb-3 rounded border-success">
+        <input type="hidden" name="new_question_type[]" value="pilihan_ganda">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <span class="fw-bold text-success">Pertanyaan Baru (Pilihan Ganda)</span>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-hapus-item" title="Hapus pertanyaan ini"><i class="fas fa-trash"></i></button>
+        </div>
+        <textarea class="form-control mb-2" name="new_question_text[]" rows="2" placeholder="Tulis teks pertanyaan di sini" required></textarea>
+        <div class="opsi-ganda-container mt-3">
+            <p class="small text-muted mb-2">Tandai salah satu pilihan sebagai jawaban yang benar.</p>
+            {% for i in range(4) %}
+            <div class="input-group mb-2">
+                <div class="input-group-text">
+                    <input class="form-check-input mt-0" type="radio" name="new_question_correct_--INDEX--" value="{{ i }}" {% if i == 0 %}checked{% endif %} required>
+                </div>
+                <input type="text" class="form-control" name="new_question_options_--INDEX--[]" placeholder="Teks Pilihan {{ i+1 }}">
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</template>
+
+<template id="template-pertanyaan-esai">
+    <div class="pertanyaan-item p-3 mb-3 rounded border-secondary">
+        <input type="hidden" name="new_question_type[]" value="esai">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <span class="fw-bold text-secondary">Pertanyaan Baru (Esai)</span>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-hapus-item" title="Hapus pertanyaan ini"><i class="fas fa-trash"></i></button>
+        </div>
+        <textarea class="form-control mb-2" name="new_question_text[]" rows="2" placeholder="Tulis teks pertanyaan esai di sini" required></textarea>
+    </div>
+</template>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('container-pertanyaan');
+    
+    // Versi paling aman untuk inisialisasi counter
+    const questionElements = document.querySelectorAll('.pertanyaan-item');
+    let newQuestionCounter = questionElements.length;
+
+    const addQuestion = (templateId) => {
+        const template = document.getElementById(templateId);
+        if (!template) return;
+
+        // Clone template dan ganti placeholder --INDEX--
+        let templateContent = template.innerHTML;
+        // Ganti placeholder --INDEX-- dengan angka unik
+        templateContent = templateContent.replace(/--INDEX--/g, newQuestionCounter);
+        
+        const newDiv = document.createElement('div');
+        newDiv.innerHTML = templateContent;
+        
+        // Append anak dari div baru, bukan div itu sendiri, agar struktur tetap rapi
+        while (newDiv.firstChild) {
+            container.appendChild(newDiv.firstChild);
+        }
+
+        newQuestionCounter++;
+    };
+
+    // Tambahkan event listener ke tombol-tombol
+    document.getElementById('btn-tambah-pg').addEventListener('click', () => addQuestion('template-pertanyaan-pg'));
+    document.getElementById('btn-tambah-esai').addEventListener('click', () => addQuestion('template-pertanyaan-esai'));
+
+    // Tambahkan satu event listener pada container untuk menghapus item baru
+    container.addEventListener('click', function(event) {
+        // Cari tombol hapus yang paling dekat dengan target klik
+        const deleteButton = event.target.closest('.btn-hapus-item');
+        if (deleteButton) {
+            // Hapus elemen pertanyaan terluar
+            deleteButton.closest('.pertanyaan-item').remove();
+        }
+    });
+});
+</script>
+{% endblock %}

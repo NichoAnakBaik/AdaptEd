@@ -1,0 +1,135 @@
+{% extends 'base.html' %}
+{% block title %}Buat Kuis Baru{% endblock %}
+
+{% block content %}
+<style>
+    /* Style untuk memisahkan setiap pertanyaan baru */
+    .pertanyaan-baru-item {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        padding: 1.25rem;
+        margin-bottom: 1rem;
+        border-radius: .5rem;
+    }
+</style>
+
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <h1 class="h2 mb-4"><i class="fas fa-plus-circle text-primary me-2"></i>Buat Kuis Baru</h1>
+
+            <form method="POST" action="{{ url_for('create_kuis') }}">
+                
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header"><h5 class="mb-0">Informasi Kuis</h5></div>
+                    <div class="card-body">
+                        <div class="form-floating mb-3">
+                            <input type="text" class="form-control" id="title" name="title" placeholder="Contoh: Kuis Bab 1" required>
+                            <label for="title">Judul Kuis</label>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6 form-floating">
+                                <input type="number" class="form-control" id="durasi" name="durasi" value="30" required min="1">
+                                <label for="durasi" class="ms-2">Durasi (menit)</label>
+                            </div>
+                            <div class="col-md-6 form-floating">
+                                <select class="form-select" id="status" name="status">
+                                    <option value="aktif" selected>Aktif (Langsung bisa diakses mahasiswa)</option>
+                                    <option value="nonaktif">Nonaktif (Disimpan sebagai draft)</option>
+                                </select>
+                                <label for="status" class="ms-2">Status</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm">
+                    <div class="card-header"><h5 class="mb-0">Daftar Pertanyaan</h5></div>
+                    <div class="card-body" id="container-pertanyaan">
+                        <p class="text-muted text-center" id="pesan-kosong">Belum ada pertanyaan. Silakan tambahkan di bawah.</p>
+                        </div>
+                    <div class="card-footer text-center">
+                        <button type="button" id="btn-tambah-pg" class="btn btn-outline-primary"><i class="fas fa-plus-circle me-1"></i> Tambah Pilihan Ganda</button>
+                        <button type="button" id="btn-tambah-esai" class="btn btn-outline-secondary"><i class="fas fa-plus-circle me-1"></i> Tambah Esai</button>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end mt-4">
+                    <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-save me-2"></i> Buat Kuis dan Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<template id="template-pertanyaan-pg">
+    <div class="pertanyaan-baru-item">
+        <input type="hidden" name="question_types" value="pilihan_ganda">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <span class="fw-bold text-primary">Pertanyaan Baru (Pilihan Ganda)</span>
+            <button type="button" class="btn-close" aria-label="Close" title="Hapus pertanyaan ini"></button>
+        </div>
+        <textarea class="form-control mb-2" name="questions" rows="2" placeholder="Tulis teks pertanyaan di sini" required></textarea>
+        <div class="opsi-ganda-container mt-3">
+            <p class="small text-muted mb-2">Tandai salah satu pilihan sebagai jawaban yang benar.</p>
+            {% for i in range(4) %}
+            <div class="input-group mb-2">
+                <div class="input-group-text">
+                    <input class="form-check-input mt-0" type="radio" name="correct_option_--INDEX--" value="{{ loop.index0 }}" {% if loop.index0 == 0 %}checked{% endif %} required>
+                </div>
+                <input type="text" class="form-control" name="options_--INDEX--" placeholder="Teks Pilihan {{ loop.index }}">
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</template>
+
+<template id="template-pertanyaan-esai">
+    <div class="pertanyaan-baru-item">
+        <input type="hidden" name="question_types" value="esai">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <span class="fw-bold text-secondary">Pertanyaan Baru (Esai)</span>
+            <button type="button" class="btn-close" aria-label="Close" title="Hapus pertanyaan ini"></button>
+        </div>
+        <textarea class="form-control mb-2" name="questions" rows="2" placeholder="Tulis teks pertanyaan esai di sini" required></textarea>
+    </div>
+</template>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('container-pertanyaan');
+    const pesanKosong = document.getElementById('pesan-kosong');
+    let questionCounter = 0;
+
+    const addQuestion = (templateId) => {
+        if(pesanKosong) pesanKosong.style.display = 'none';
+
+        const template = document.getElementById(templateId);
+        let clone = document.importNode(template.content, true);
+
+        // Unikkan nama radio button dan pilihan untuk soal PG baru
+        if (templateId === 'template-pertanyaan-pg') {
+            clone.querySelector('input[type="radio"]').name = `correct_option_${questionCounter}`;
+            clone.querySelectorAll('input[type="text"]').forEach(input => {
+                input.name = `options_${questionCounter}`;
+            });
+        }
+        
+        container.appendChild(clone);
+        questionCounter++;
+    };
+
+    document.getElementById('btn-tambah-pg').addEventListener('click', () => addQuestion('template-pertanyaan-pg'));
+    document.getElementById('btn-tambah-esai').addEventListener('click', () => addQuestion('template-pertanyaan-esai'));
+
+    container.addEventListener('click', function(event) {
+        if (event.target.classList.contains('btn-close')) {
+            event.target.closest('.pertanyaan-baru-item').remove();
+            if(container.children.length === 1) { // Hanya ada pesan-kosong
+                pesanKosong.style.display = 'block';
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

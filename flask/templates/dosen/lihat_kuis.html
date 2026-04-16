@@ -1,0 +1,152 @@
+{% extends 'base.html' %}
+{% block title %}Detail Kuis: {{ kuis.judul }}{% endblock %}
+
+{% block content %}
+<style>
+    /* [PERBAIKAN] Membuat teks tab yang tidak aktif lebih terlihat */
+    .nav-tabs .nav-link {
+        color: #6c757d; /* Warna abu-abu yang lebih gelap untuk tab tidak aktif */
+    }
+    .nav-tabs .nav-link.active {
+        color: var(--primary); /* Warna primer untuk tab aktif */
+        border-color: #dee2e6 #dee2e6 #fff;
+    }
+    .accordion-button:not(.collapsed) {
+        background-color: rgba(var(--bs-primary-rgb), 0.05);
+        color: var(--bs-primary);
+        box-shadow: inset 0 -1px 0 rgba(0,0,0,.125);
+    }
+</style>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2 mb-0"><i class="fas fa-clipboard-list text-primary me-2"></i>Detail Kuis</h1>
+            <p class="text-muted mb-0">Anda sedang melihat detail untuk kuis: <strong>{{ kuis.judul }}</strong></p>
+        </div>
+        <div>
+            <a href="{{ url_for('kuis') }}" class="btn btn-secondary me-2"><i class="fas fa-arrow-left me-1"></i> Kembali</a>
+            <a href="{{ url_for('edit_kuis', id_kuis=kuis.id_kuis) }}" class="btn btn-primary"><i class="fas fa-edit me-1"></i> Edit Kuis</a>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <ul class="nav nav-tabs card-header-tabs" id="kuisTab" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="detail-tab" data-bs-toggle="tab" data-bs-target="#detail" type="button" role="tab">
+                        <i class="fas fa-info-circle me-1"></i> Informasi Detail
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="pertanyaan-tab" data-bs-toggle="tab" data-bs-target="#pertanyaan" type="button" role="tab">
+                        <i class="fas fa-list-ol me-1"></i> Daftar Pertanyaan
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="hasil-tab" data-bs-toggle="tab" data-bs-target="#hasil" type="button" role="tab">
+                        <i class="fas fa-chart-bar me-1"></i> Hasil Mahasiswa <span class="badge rounded-pill bg-primary ms-1">{{ hasil_list|length }}</span>
+                    </button>
+                </li>
+            </ul>
+        </div>
+        <div class="card-body">
+            <div class="tab-content p-3" id="kuisTabContent">
+                <div class="tab-pane fade show active" id="detail" role="tabpanel">
+                    <dl class="row">
+                        <dt class="col-sm-3">Judul Kuis</dt>
+                        <dd class="col-sm-9"><span style="color: #212529; font-weight: 500;">{{ kuis.judul }}</span></dd>
+
+                        <dt class="col-sm-3">Status</dt>
+                        <dd class="col-sm-9"><span class="badge {{ 'bg-success' if kuis.status == 'aktif' else 'bg-secondary' }}">{{ kuis.status|capitalize }}</span></dd>
+
+                        <dt class="col-sm-3">Durasi</dt>
+                        <dd class="col-sm-9"><span style="color: #212529; font-weight: 500;">{{ kuis.durasi }} menit</span></dd>
+
+                        <dt class="col-sm-3">Dibuat oleh</dt>
+                        <dd class="col-sm-9"><span style="color: #212529; font-weight: 500;">{{ kuis.nama_dosen }}</span></dd>
+                        
+                        <dt class="col-sm-3">Tanggal Dibuat</dt>
+                        <dd class="col-sm-9"><span style="color: #212529; font-weight: 500;">{{ kuis.tanggal_dibuat.strftime('%d %B %Y, %H:%M') }}</span></dd>
+                    </dl>
+                </div>
+
+                <div class="tab-pane fade" id="pertanyaan" role="tabpanel">
+                    {% if pertanyaan_list %}
+                    <div class="accordion" id="accordionPertanyaan">
+                        {% for p in pertanyaan_list %}
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-q-{{ p.id_pertanyaan }}">
+                                    <strong>#{{ loop.index }}&nbsp;</strong> {{ p.teks_pertanyaan }}
+                                </button>
+                            </h2>
+                            <div id="collapse-q-{{ p.id_pertanyaan }}" class="accordion-collapse collapse" data-bs-parent="#accordionPertanyaan">
+                                <div class="accordion-body">
+                                    {% if p.jenis == 'pilihan_ganda' and p.pilihan_list %}
+                                        <ul class="list-group">
+                                        {% for pil in p.pilihan_list %}
+                                            <li class="list-group-item {{ 'list-group-item-success' if pil.is_correct else '' }}">
+                                                {{ pil.text }}
+                                                {% if pil.is_correct %}<i class="fas fa-check-circle text-success ms-2"></i>{% endif %}
+                                            </li>
+                                        {% endfor %}
+                                        </ul>
+                                    {% else %}
+                                        <span class="text-muted fst-italic">Pertanyaan Esai - Dinilai manual oleh dosen.</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                        <div class="alert alert-info">Belum ada pertanyaan yang ditambahkan untuk kuis ini.</div>
+                    {% endif %}
+                </div>
+
+                <div class="tab-pane fade" id="hasil" role="tabpanel">
+                    {% if hasil_list %}
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Nama Mahasiswa</th>
+                                    <th>NIM</th>
+                                    <th>Nilai</th>
+                                    <th>Status Pengerjaan</th>
+                                    <th class="text-end">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            {% for h in hasil_list %}
+                                <tr>
+                                    <td>{{ h.nama_mahasiswa }}</td>
+                                    <td><code>{{ h.NIM }}</code></td>
+                                    <td>
+                                        {% if h.nilai_total is not none %}
+                                            <span class="badge fs-6 {{ 'bg-success' if h.nilai_total >= 75 else 'bg-warning' }}">{{ "%.2f"|format(h.nilai_total) }}</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Belum Dinilai</span>
+                                        {% endif %}
+                                    </td>
+                                    <td><span class="badge bg-info text-dark">{{ h.status|replace('_', ' ')|title }}</span></td>
+                                    <td class="text-end">
+                                        <a href="{{ url_for('nilai_essay', id_kuis=kuis.id_kuis, nim=h.NIM) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-search"></i> Periksa Jawaban
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                        <div class="alert alert-info">Belum ada mahasiswa yang mengerjakan kuis ini.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

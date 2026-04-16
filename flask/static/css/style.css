@@ -1,0 +1,132 @@
+/* Body Styling */
+body {
+    margin: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8f9fa;
+}
+
+/* Navbar Styling */
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #007BFF;
+    padding: 15px 30px;
+    color: white;
+    flex-wrap: wrap;
+}
+
+.navbar-brand {
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.navbar-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.navbar-links a {
+    margin-left: 15px;
+    text-decoration: none;
+    color: white;
+    font-weight: 500;
+    transition: color 0.3s;
+}
+
+.navbar-links a:hover {
+    color: #d1ecf1;
+}
+
+.logout-btn {
+    background-color: #dc3545;
+    padding: 6px 12px;
+    border-radius: 4px;
+    color: white;
+    margin-left: 15px;
+}
+
+.logout-btn:hover {
+    background-color: #c82333;
+}
+
+/* Content Section */
+.content {
+    padding: 20px;
+}
+
+/* Dashboard Title */
+.dashboard-title {
+    font-size: 24px;
+    color: #333;
+    margin-bottom: 10px;
+}
+
+.lead {
+    font-size: 18px;
+    color: #555;
+    margin-bottom: 20px;
+}
+
+/* Dashboard Grid */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+/* Card Style */
+.card {
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+}
+
+.card-title {
+    font-size: 18px;
+    margin-bottom: 15px;
+    color: #333;
+}
+
+/* List Style */
+.list {
+    list-style-type: none;
+    padding: 0;
+}
+
+.list li {
+    margin-bottom: 10px;
+}
+
+.empty {
+    color: #777;
+}
+
+/* Kelas Grid */
+.kelas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+}
+
+.kelas-box {
+    background-color: #f0f4f8;
+    padding: 15px;
+    border-radius: 8px;
+    text-align: center;
+    color: #333;
+    font-weight: bold;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.full-width {
+    grid-column: span 2;
+}
+
+/* Empty State Message */
+.empty {
+    color: #777;
+    font-style: italic;
+}

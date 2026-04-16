@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+    .dashboard-container { max-width: 1100px; margin: 0 auto; }
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 0.75rem; border-bottom: 2px solid var(--primary); }
+    .section-title { color: var(--dark); font-size: 1.5rem; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 0.75rem; }
+    .section-title i { color: var(--primary); }
+    .btn-edit-top { background-color: var(--secondary); color: white; padding: 0.5rem 1rem; border: none; border-radius: 50px; cursor: pointer; font-size: 0.9rem; font-weight: 500; transition: all 0.3s ease; display: flex; align-items: center; gap: 0.5rem; }
+    .btn-edit-top:hover { background-color: #27ae60; box-shadow: 0 4px 15px rgba(46, 204, 113, 0.4); transform: translateY(-2px); }
+    .info-grid { display: grid; grid-template-columns: 150px auto; gap: 0.75rem 1.5rem; margin-bottom: 2rem; background-color: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+    .kelas-list { list-style: none; padding: 0; display: grid; gap: 1.5rem; }
+    .kelas-item { background: white; padding: 1.5rem; border-radius: 12px; border-left: 5px solid var(--primary-dark); box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: all 0.3s ease; }
+    .kelas-item:hover { transform: translateY(-5px) scale(1.02); box-shadow: 0 8px 25px rgba(0,0,0,0.1); }
+    .kelas-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; }
+    .kelas-info h4 { color: var(--primary); font-size: 1.25rem; font-weight: 600; margin: 0 0 0.5rem 0; }
+    .kelas-info p { margin: 0.25rem 0; color: #6c757d; font-size: 0.9rem; }
+    .btn-small { padding: 0.4rem 0.8rem; border-radius: 50px; text-decoration: none; font-size: 0.8rem; font-weight: 500; transition: all 0.3s ease; display: inline-flex; align-items: center; gap: 0.3rem; border: none; color: white; }
+    .btn-materi { background-color: var(--primary); }
+    .btn-kuis { background-color: var(--warning); }
+    .empty-data, .empty-kelas { text-align: center; padding: 3rem; background-color: white; border-radius: 12px; color: #6c757d; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+    .empty-data i, .empty-kelas i { font-size: 3rem; margin-bottom: 1rem; display: block; color: #ced4da; }
+    .animate-on-scroll { opacity: 0; transform: translateY(20px); transition: opacity 0.6s ease-out, transform 0.6s ease-out; }
+    .animate-on-scroll.visible { opacity: 1; transform: translateY(0); }
+</style>
+
+<div class="dashboard-container">
+    {% if message %}
+        <div class="alert alert-{{ 'success' if message_type == 'success' else 'danger' }} alert-dismissible fade show" role="alert">{{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+    {% endif %}
+    <div class="animate-on-scroll">
+        <div class="section-header">
+            <h2 class="section-title"><i class="fas fa-user-graduate"></i>Informasi Mahasiswa</h2>
+            <button type="button" class="btn-edit-top" data-bs-toggle="modal" data-bs-target="#profileModal"><i class="fas fa-edit"></i><span>{% if mahasiswa_info %}Edit Profil{% else %}Lengkapi Profil{% endif %}</span></button>
+        </div>
+        {% if mahasiswa_info %}<div class="info-grid"><div>Nama</div><div>{{ mahasiswa_info.nama or '-' }}</div><div>NIM</div><div>{{ mahasiswa_info.NIM or '-' }}</div><div>Email</div><div>{{ mahasiswa_info.email or '-' }}</div><div>Jurusan</div><div>{{ mahasiswa_info.jurusan or '-' }}</div></div>
+        {% else %}<div class="empty-data"><i class="fas fa-user-edit"></i><p>Data diri belum lengkap. Silakan lengkapi data diri Anda.</p></div>{% endif %}
+    </div>
+
+    <div class="kelas-section mt-5 animate-on-scroll" style="transition-delay: 100ms;">
+        <div class="section-header"><h2 class="section-title"><i class="fas fa-chalkboard-teacher"></i>Kelas yang Diambil</h2></div>
+        {% if kelas_list %}<div class="kelas-list">{% for kelas in kelas_list %}<div class="kelas-item"><div class="kelas-header"><div class="kelas-info"><h4>{{ kelas.nama_kelas }}</h4><p><strong>Dosen:</strong> {{ kelas.nama_dosen }}</p><p><strong>Kode:</strong> {{ kelas.kode_matkul }}</p></div><div class="kelas-actions"><a href="{{ url_for('materi', kelas_id=kelas.id_kelas) }}" class="btn-small btn-materi"><i class="fas fa-book-open"></i> Materi</a><a href="{{ url_for('kuis', kelas_id=kelas.id_kelas) }}" class="btn-small btn-kuis"><i class="fas fa-pencil-alt"></i> Kuis</a></div></div></div>{% endfor %}</div>
+        {% else %}<div class="empty-kelas"><i class="fas fa-school"></i><p>Anda belum terdaftar di kelas manapun.</p></div>{% endif %}
+    </div>
+</div>
+
+<div class="modal fade" id="profileModal" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content" style="border-radius: 15px;"><div class="modal-header"><h5 class="modal-title"><i class="fas fa-user-edit me-2"></i>Profil Mahasiswa</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><form method="POST" action="{{ url_for('update_mahasiswa_profile') }}"><div class="modal-body"><div class="row g-3">
+<div class="col-md-6 form-floating"><input type="text" class="form-control" name="nama" value="{{ mahasiswa_info.nama if mahasiswa_info else '' }}" placeholder="Nama" required><label class="ms-2">Nama Lengkap *</label></div>
+<div class="col-md-6 form-floating"><input type="text" class="form-control" name="nim" value="{{ mahasiswa_info.NIM if mahasiswa_info else '' }}" placeholder="NIM" {% if mahasiswa_info %}readonly{% endif %} required><label class="ms-2">NIM *</label></div>
+<div class="col-md-6 form-floating"><input type="email" class="form-control" name="email" value="{{ mahasiswa_info.email if mahasiswa_info else '' }}" placeholder="Email" required><label class="ms-2">Email *</label></div>
+<div class="col-md-6 form-floating"><select class="form-select" name="jurusan" required><option value="" disabled selected>Pilih</option><option value="Teknik Informatika" {% if mahasiswa_info and mahasiswa_info.jurusan == 'Teknik Informatika' %}selected{% endif %}>Teknik Informatika</option><option value="Sistem Informasi" {% if mahasiswa_info and mahasiswa_info.jurusan == 'Sistem Informasi' %}selected{% endif %}>Sistem Informasi</option></select><label class="ms-2">Jurusan *</label></div>
+<div class="col-md-6 form-floating"><input type="number" class="form-control" name="angkatan" value="{{ mahasiswa_info.angkatan if mahasiswa_info else '' }}" placeholder="Angkatan"><label class="ms-2">Angkatan</label></div>
+<div class="col-md-6 form-floating"><input type="tel" class="form-control" name="no_hp" value="{{ mahasiswa_info.no_hp if mahasiswa_info else '' }}" placeholder="No. HP"><label class="ms-2">No. HP</label></div>
+<div class="col-12 form-floating"><textarea class="form-control" name="alamat" style="height: 100px">{{ mahasiswa_info.alamat if mahasiswa_info else '' }}</textarea><label class="ms-2">Alamat</label></div>
+</div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button><button type="submit" class="btn btn-primary">Simpan</button></div></form></div></div></div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => { if (entry.isIntersecting) entry.target.classList.add('visible'); });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.animate-on-scroll').forEach(el => observer.observe(el));
+});
+</script>
+{% endblock %}

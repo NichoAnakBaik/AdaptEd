@@ -1,0 +1,211 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard Dosen{% endblock %}
+
+{% block content %}
+<style>
+    /* Menggunakan style yang sama persis dengan dashboard mahasiswa untuk konsistensi */
+    .dashboard-container {
+        max-width: 900px;
+        margin: 30px auto;
+        padding: 20px;
+        position: relative;
+    }
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    .section-title {
+        color: #007bff;
+        font-size: 20px;
+        margin: 0;
+        border-bottom: 2px solid #007bff;
+        padding-bottom: 5px;
+        flex-grow: 1;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    .btn-edit-top {
+        background-color: #28a745;
+        color: white;
+        padding: 8px 16px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        margin-left: 20px;
+    }
+    .btn-edit-top:hover {
+        background-color: #1e7e34;
+        transform: translateY(-1px);
+    }
+    .info-grid {
+        display: grid;
+        grid-template-columns: 150px auto;
+        gap: 10px 20px;
+        margin-bottom: 30px;
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .kelas-section {
+        margin-top: 40px;
+    }
+    .kelas-list {
+        list-style: none;
+        padding: 0;
+        display: grid;
+        gap: 20px;
+    }
+    .kelas-item {
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+        padding: 20px;
+        border-radius: 12px;
+        border: 1px solid #e9ecef;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        transition: all 0.3s ease;
+    }
+    .kelas-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    }
+    .kelas-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 15px;
+    }
+    .kelas-info h4 {
+        color: #2c3e50;
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0 0 8px 0;
+    }
+    .kelas-info p {
+        margin: 4px 0;
+        color: #6c757d;
+        font-size: 14px;
+    }
+    .kelas-actions {
+        display: flex;
+        gap: 8px;
+        flex-shrink: 0;
+    }
+    .btn-small {
+        padding: 6px 12px;
+        border-radius: 6px;
+        text-decoration: none;
+        font-size: 12px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .btn-materi { background-color: #007bff; color: white; }
+    .btn-kuis { background-color: #fd7e14; color: white; }
+    .btn-mahasiswa { background-color: #17a2b8; color: white; }
+    .btn-materi:hover { background-color: #0056b3; }
+    .btn-kuis:hover { background-color: #e8590c; }
+    .btn-mahasiswa:hover { background-color: #107586; }
+
+    .form-container { background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-top: 20px; }
+    .hide-form { display: none; }
+    .show-form { display: block; }
+    .form-group { margin-bottom: 15px; }
+    .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+    .form-group input, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    .btn { background-color: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; transition: background-color 0.3s; }
+    .btn:hover { background-color: #0056b3; }
+</style>
+
+<div class="dashboard-container">
+    <div class="section-header">
+        <h2 class="section-title"><i class="fas fa-user-tie me-2"></i>Informasi Dosen</h2>
+        {% if dosen_info %}
+            <button type="button" class="btn-edit-top" onclick="toggleEditForm()"><i class="fas fa-edit me-1"></i> Edit Profil</button>
+        {% endif %}
+    </div>
+    
+    {% if dosen_info %}
+        <div class="info-grid">
+            <div><strong>Nama:</strong></div><div>{{ dosen_info.nama or '-' }}</div>
+            <div><strong>NIP:</strong></div><div>{{ dosen_info.nip or '-' }}</div>
+            <div><strong>Email:</strong></div><div>{{ dosen_info.email or '-' }}</div>
+            <div><strong>Departemen:</strong></div><div>{{ dosen_info.departemen or '-' }}</div>
+        </div>
+    {% else %}
+        <p class="text-muted">Data dosen tidak ditemukan.</p>
+    {% endif %}
+
+    <div class="form-container hide-form" id="editForm">
+        <h3 class="section-title mb-4">Edit Data Diri</h3>
+        <form method="POST" action="{{ url_for('update_dosen_profile') }}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="nama">Nama Lengkap *</label>
+                    <input type="text" id="nama" name="nama" value="{{ dosen_info.nama if dosen_info else '' }}" required>
+                </div>
+                <div class="form-group">
+                    <label for="nip">NIP *</label>
+                    <input type="text" id="nip" name="nip" value="{{ dosen_info.nip if dosen_info else '' }}" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="email">Email *</label>
+                    <input type="email" id="email" name="email" value="{{ dosen_info.email if dosen_info else '' }}" required>
+                </div>
+                <div class="form-group">
+                    <label for="departemen">Departemen</label>
+                    <input type="text" id="departemen" name="departemen" value="{{ dosen_info.departemen if dosen_info else '' }}">
+                </div>
+            </div>
+            <div>
+                <button type="submit" class="btn">Update Data</button>
+                <button type="button" class="btn" onclick="toggleEditForm()" style="background-color: #6c757d; margin-left: 10px;">Batal</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="kelas-section">
+        <h2 class="section-title">Kelas yang Diampu</h2>
+        {% if kelas_list %}
+            <div class="kelas-list">
+                {% for kelas in kelas_list %}
+                    <div class="kelas-item">
+                        <div class="kelas-header">
+                            <div class="kelas-info">
+                                <h4>{{ kelas.nama_kelas }}</h4>
+                                <p><strong>Kode:</strong> {{ kelas.kode_matkul }} | <strong>Tahun Ajaran:</strong> {{ kelas.tahun_ajaran }}</p>
+                            </div>
+                            <div class="kelas-actions">
+                                <a href="{{ url_for('materi', id_kelas=kelas.id_kelas) }}" class="btn-small btn-materi"><i class="fas fa-book-open"></i> Kelola Materi</a>
+                                <a href="{{ url_for('kuis', id_kelas=kelas.id_kelas) }}" class="btn-small btn-kuis"><i class="fas fa-pencil-alt"></i> Kelola Kuis</a>
+                                <a href="#" class="btn-small btn-mahasiswa"><i class="fas fa-users"></i> Lihat Mahasiswa</a>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="empty-kelas"><p>Anda belum mengampu kelas manapun.</p></div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    function toggleEditForm() {
+        const form = document.getElementById('editForm');
+        form.classList.toggle('hide-form');
+        form.classList.toggle('show-form');
+    }
+</script>
+{% endblock %}
