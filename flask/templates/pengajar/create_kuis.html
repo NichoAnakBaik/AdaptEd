@@ -1,0 +1,135 @@
+{% extends 'base.html' %}
+
+{% block title %}Buat Kuis Baru{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="d-flex align-items-center mb-4">
+                <a href="{{ url_for('kuis_pengajar') }}" class="btn btn-light rounded-circle me-3 shadow-sm">
+                    <i class="fas fa-arrow-left"></i>
+                </a>
+                <h2 class="fw-bold mb-0">Buat Kuis Baru</h2>
+            </div>
+
+            <form method="POST" action="{{ url_for('create_kuis') }}">
+                <div class="card border-0 shadow-sm rounded-4 mb-4">
+                    <div class="card-body p-4">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Pilih Kelas</label>
+                                <select name="id_kelas" class="form-select rounded-pill" required>
+                                    <option value="" disabled selected>-- Pilih Kelas --</option>
+                                    {% for k in kelas_list %}
+                                    <option value="{{ k.id_kelas }}">{{ k.nama_kelas }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Judul Kuis</label>
+                                <input type="text" name="judul_kuis" class="form-control rounded-pill" placeholder="Contoh: Kuis Akhir Bab 1" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Durasi (Menit)</label>
+                                <input type="number" name="durasi" class="form-control rounded-pill" value="30" required>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="container-pertanyaan">
+                    <div class="card border-0 shadow-sm rounded-4 mb-4 pertanyaan-item">
+                        <div class="card-body p-4">
+                            <div class="d-flex justify-content-between mb-3">
+                                <h5 class="fw-bold text-primary">Pertanyaan #1</h5>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <textarea name="pertanyaan[]" class="form-control mb-2" rows="2" placeholder="Tuliskan pertanyaan di sini..." required></textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="small fw-bold">Kategori Kompetensi</label>
+                                    <select name="kategori_kompetensi[]" class="form-select form-select-sm" required>
+                                        <option value="Reading">Reading</option>
+                                        <option value="Listening">Listening</option>
+                                        <option value="Grammar">Grammar</option>
+                                        <option value="Writing">Writing</option>
+                                        <option value="Speaking">Speaking</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="small fw-bold text-success">Jawaban Benar</label>
+                                    <select name="jawaban_benar[]" class="form-select form-select-sm" required>
+                                        <option value="A">Pilihan A</option>
+                                        <option value="B">Pilihan B</option>
+                                        <option value="C">Pilihan C</option>
+                                        <option value="D">Pilihan D</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6"><input type="text" name="opsi_a[]" class="form-control form-control-sm" placeholder="Opsi A" required></div>
+                                <div class="col-md-6"><input type="text" name="opsi_b[]" class="form-control form-control-sm" placeholder="Opsi B" required></div>
+                                <div class="col-md-6"><input type="text" name="opsi_c[]" class="form-control form-control-sm" placeholder="Opsi C" required></div>
+                                <div class="col-md-6"><input type="text" name="opsi_d[]" class="form-control form-control-sm" placeholder="Opsi D" required></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between mt-4 mb-5">
+                    <button type="button" class="btn btn-outline-primary rounded-pill px-4" id="btn-tambah-soal">
+                        <i class="fas fa-plus me-2"></i>Tambah Soal
+                    </button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-5 fw-bold">Simpan Kuis</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    let soalCount = 1;
+    document.getElementById('btn-tambah-soal').addEventListener('click', function() {
+        soalCount++;
+        const container = document.getElementById('container-pertanyaan');
+        const html = `
+            <div class="card border-0 shadow-sm rounded-4 mb-4 pertanyaan-item">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between mb-3">
+                        <h5 class="fw-bold text-primary">Pertanyaan #${soalCount}</h5>
+                        <button type="button" class="btn-close" onclick="this.closest('.pertanyaan-item').remove()"></button>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <textarea name="pertanyaan[]" class="form-control mb-2" rows="2" placeholder="Tuliskan pertanyaan di sini..." required></textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="small fw-bold">Kategori Kompetensi</label>
+                            <select name="kategori_kompetensi[]" class="form-select form-select-sm" required>
+                                <option value="Reading">Reading</option>
+                                <option value="Listening">Listening</option>
+                                <option value="Grammar">Grammar</option>
+                                <option value="Writing">Writing</option>
+                                <option value="Speaking">Speaking</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="small fw-bold text-success">Jawaban Benar</label>
+                            <select name="jawaban_benar[]" class="form-select form-select-sm" required>
+                                <option value="A">Pilihan A</option>
+                                <option value="B">Pilihan B</option>
+                                <option value="C">Pilihan C</option>
+                                <option value="D">Pilihan D</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6"><input type="text" name="opsi_a[]" class="form-control form-control-sm" placeholder="Opsi A" required></div>
+                        <div class="col-md-6"><input type="text" name="opsi_b[]" class="form-control form-control-sm" placeholder="Opsi B" required></div>
+                        <div class="col-md-6"><input type="text" name="opsi_c[]" class="form-control form-control-sm" placeholder="Opsi C" required></div>
+                        <div class="col-md-6"><input type="text" name="opsi_d[]" class="form-control form-control-sm" placeholder="Opsi D" required></div>
+                    </div>
+                </div>
+            </div>`;
+        container.insertAdjacentHTML('beforeend', html);
+    });
+</script>
+{% endblock %}

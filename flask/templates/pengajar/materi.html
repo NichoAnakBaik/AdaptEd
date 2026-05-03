@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+
+{% block title %}Kelola Materi{% endblock %}
+
+{% block content %}
+<style>
+    .header-materi {
+        padding: 2.5rem;
+        margin-bottom: 2rem;
+        color: white;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        border-radius: 12px;
+    }
+    .header-materi h1 { font-weight: 700; margin: 0 0 0.5rem 0; }
+    .header-materi p { opacity: 0.9; font-size: 1.1rem; }
+
+    .kelas-container {
+        margin-bottom: 2.5rem;
+        opacity: 0;
+        transform: translateY(20px);
+        transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+    }
+    .kelas-container.visible { opacity: 1; transform: translateY(0); }
+
+    .kelas-header {
+        background: white;
+        color: var(--dark);
+        padding: 1.5rem;
+        border-radius: 12px 12px 0 0;
+        border: 1px solid #e9ecef;
+        border-bottom: 2px solid var(--primary);
+    }
+    .kelas-header h2 { margin: 0; font-size: 1.5rem; font-weight: 600; display: flex; align-items: center; gap: 0.75rem; }
+    .kelas-header .kelas-info { display: flex; gap: 1.5rem; margin-top: 0.75rem; font-size: 0.9rem; color: var(--gray); }
+
+    .materi-list .list-group-item {
+        padding: 1.5rem;
+        transition: background-color 0.3s ease, transform 0.2s ease;
+        border-left: 1px solid #e9ecef;
+        border-right: 1px solid #e9ecef;
+    }
+    .materi-list .list-group-item:last-child {
+        border-bottom-left-radius: 12px;
+        border-bottom-right-radius: 12px;
+        border-bottom: 1px solid #e9ecef;
+    }
+    .materi-list .list-group-item:hover {
+        background-color: #f8f9fa;
+        transform: translateX(5px);
+    }
+    .materi-info h5 { font-weight: 600; color: var(--dark); }
+    .materi-meta { font-size: 0.8rem; color: var(--gray); }
+    .materi-meta span { display: inline-flex; align-items: center; gap: 0.4rem; }
+</style>
+
+<div class="container-fluid">
+    <div class="header-materi shadow-sm d-flex justify-content-between align-items-center">
+        <div>
+            <h1><i class="fas fa-book-medical"></i> Kelola Materi</h1>
+            <p class="mb-0">Atur semua materi dari kelas yang Anda ampu.</p>
+        </div>
+        <a href="{{ url_for('upload_materi') }}" class="btn btn-light fw-bold"><i class="fas fa-plus me-2"></i>Upload Materi Baru</a>
+    </div>
+
+    {% if kelas_list %}
+        {% for kelas in kelas_list %}
+            <div class="kelas-container animate-on-scroll">
+                <div class="kelas-header shadow-sm">
+                    <h2><i class="fas fa-school text-primary"></i>{{ kelas.nama_kelas }}</h2>
+                    <div class="kelas-info">
+                        <span><i class="fas fa-barcode"></i>{{ kelas.kode_matkul }}</span>
+                    </div>
+                </div>
+
+                <div class="list-group list-group-flush materi-list shadow-sm">
+                    {% if kelas.materi_list %}
+                        {% for materi in kelas.materi_list %}
+                            <div class="list-group-item">
+                                <div class="row align-items-center">
+                                    <div class="col-md-7">
+                                        <div class="materi-info">
+                                            <h5>{{ materi.title or 'Judul Tidak Tersedia' }}</h5>
+                                            <p class="text-muted mb-2 small">{{ materi.deskripsi or 'Tidak ada deskripsi.' }}</p>
+                                        </div>
+                                        <div class="materi-meta">
+                                            <span><i class="far fa-calendar-alt"></i> Dibuat: {{ materi.created_at.strftime('%d %b %Y') }}</span>
+                                            {% if materi.file_name %}
+                                            <span class="ms-3"><i class="fas fa-paperclip"></i> {{ materi.file_name[:25] }}{{ '...' if materi.file_name|length > 25 else '' }}</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="col-md-5 text-md-end mt-3 mt-md-0">
+                                        <a href="{{ url_for('edit_materi', materi_id=materi.id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-edit me-1"></i> Edit</a>
+                                        <form action="{{ url_for('delete_materi', materi_id=materi.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Apakah Anda yakin ingin menghapus materi ini?');">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash me-1"></i> Hapus</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="list-group-item text-center text-muted p-4">Belum ada materi untuk kelas ini.</div>
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
+    {% else %}
+        <div class="text-center p-5 bg-light rounded">
+            <i class="fas fa-folder-open fa-3x text-muted mb-3"></i>
+            <h3>Anda Belum Mengampu Kelas</h3>
+            <p class="text-muted">Silakan hubungi admin untuk dibuatkan kelas terlebih dahulu.</p>
+        </div>
+    {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => { if (entry.isIntersecting) entry.target.classList.add('visible'); });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.animate-on-scroll').forEach(el => observer.observe(el));
+});
+</script>
+{% endblock %}

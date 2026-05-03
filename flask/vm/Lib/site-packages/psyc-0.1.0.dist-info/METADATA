@@ -1,0 +1,49 @@
+Metadata-Version: 2.1
+Name: psyc
+Version: 0.1.0
+Summary: PSYC! Parameter Store Your Config
+Author: Harvard DCE
+License: MIT
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: click
+Requires-Dist: boto3
+
+# psyc - Parameter Store Your Configs!
+
+psyc is a Python tool for managing config files in AWS Parameter Store.
+
+## Installation for use in a different project
+
+`pip install psyc` and then add `psyc` to your project's `requirements.txt` file
+
+## Usage
+
+1. Create a file `.psyc.state` in the package directory containing a json in the form:
+
+```
+{
+		"config" : "name_of_config"
+}
+```
+
+2. From the package directory, show all available commands with: `psyc --help`
+
+_Note: The included `.psyc` file in this repo contains the namespace for this project. Change the name of the 'namespace' value in order to use for other projects._
+
+## Development
+
+#### If you just want to work on the `psyc` code:
+
+1. Check out the psyc repo
+1. Create & activate a virtualenv
+1. Run `pip install -e .` to install in "editable" mode.
+1. Run `pip install -r requirements.txt` to ensure you also get the dev dependencies, like flake8 and pre-commit.
+1. Run `pre-commit install` to install the git pre-commit linting and formatting hook
+
+## If you want to develop `psyc` while testing/using in project "foo"
+
+1. Navigate to your local checkout of foo
+1. Activate the foo virtualenv. Note: just because foo isn't a python project doesn't mean it can't have a virtualenv.
+1. Run `pip install -e /path/to/your/psyc/repo`
+1. You can now make changes to the psyc code while testing the changes in foo.
