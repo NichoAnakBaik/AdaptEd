@@ -1,65 +1,62 @@
 {% extends 'base.html' %}
-{% block title %}Dashboard Tenaga Pendidik{% endblock %}
+{% block title %}Dashboard Pengajar - AdaptEd{% endblock %}
 
 {% block content %}
-<div class="container-fluid p-0">
-    <div class="mb-4">
-        <h2 class="fw-bold">Jadwal Mengajar Minggu Ini</h2>
-        <p class="text-muted">Pantau jadwal *Live Class* dan pertemuan tatap muka Anda.</p>
-    </div>
-
-    <h5 class="fw-bold text-dark mb-3">Senin, 6 Oktober 2025</h5>
-    
-    <div class="card border-0 shadow-sm rounded-4 mb-3">
-        <div class="card-body p-4 d-flex align-items-center">
-            <div class="text-center border-end pe-4 me-4">
-                <h4 class="fw-bold text-primary mb-0">10:00</h4>
-                <small class="text-muted">WIB</small>
-            </div>
-            <div class="flex-grow-1">
-                <h5 class="fw-bold mb-1">Korean Intermediate Level 2 - Live Class</h5>
-                <p class="text-muted small mb-0">
-                    <i class="fas fa-users me-1"></i> 35 siswa &nbsp;|&nbsp; 
-                    <i class="fas fa-map-marker-alt me-1"></i> Room: A-301 &nbsp;|&nbsp; 
-                    <i class="fas fa-book-open me-1"></i> Topic: Past Tense Review
-                </p>
-            </div>
-            <div>
-                <button class="btn btn-primary rounded-pill px-4 fw-bold">Mulai Kelas</button>
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm rounded-4 bg-primary text-white p-4">
+                <div class="d-flex align-items-center">
+                    <div class="me-4 d-none d-md-block">
+                        <i class="fas fa-book-reader fa-5x opacity-50"></i>
+                    </div>
+                    <div>
+                        <h2 class="fw-bold mb-1">안녕하세요, {{ data.nama_user }}!</h2>
+                        <p class="mb-0 opacity-75">Panel Manajemen Namsan Korean Course. Kelola materi dan pantau progres akademik siswa.</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="card border-0 shadow-sm rounded-4 mb-5">
-        <div class="card-body p-4 d-flex align-items-center">
-            <div class="text-center border-end pe-4 me-4">
-                <h4 class="fw-bold text-primary mb-0">14:00</h4>
-                <small class="text-muted">WIB</small>
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 p-4 text-center stat-card">
+                <div class="text-primary mb-2"><i class="fas fa-university fa-2x"></i></div>
+                <h6 class="text-muted small fw-bold text-uppercase">Kelas Aktif</h6>
+                <h2 class="fw-bold text-dark">{{ data.total_kelas }}</h2>
             </div>
-            <div class="flex-grow-1">
-                <h5 class="fw-bold mb-1">Korean Speaking Practice - Kelas A</h5>
-                <p class="text-muted small mb-0">
-                    <i class="fas fa-users me-1"></i> 22 siswa &nbsp;|&nbsp; 
-                    <i class="fas fa-map-marker-alt me-1"></i> Room: B-205 &nbsp;|&nbsp; 
-                    <i class="fas fa-book-open me-1"></i> Topic: Daily Conversation
-                </p>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 p-4 text-center stat-card">
+                <div class="text-success mb-2"><i class="fas fa-edit fa-2x"></i></div>
+                <h6 class="text-muted small fw-bold text-uppercase">Total Kuis</h6>
+                <h2 class="fw-bold text-dark">{{ data.total_kuis }}</h2>
             </div>
-            <div>
-                <button class="btn btn-outline-primary rounded-pill px-4 fw-bold">Detail Kelas</button>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 p-4 h-100 d-flex flex-row align-items-center justify-content-between stat-card">
+                <div>
+                    <h6 class="fw-bold text-uppercase small text-muted mb-1">Status Sistem</h6>
+                    <p class="small mb-0 text-success"><i class="fas fa-check-circle me-1"></i> Database Terhubung</p>
+                </div>
+                <img src="https://flagcdn.com/w80/kr.png" alt="Korea" style="width: 60px; border-radius: 5px; border: 1px solid #eee;">
             </div>
         </div>
     </div>
 
-    <h5 class="fw-bold text-dark mb-3">Selasa, 7 Oktober 2025</h5>
-    
-    <div class="card border-0 shadow-sm rounded-4 mb-3">
-        <div class="card-body p-4 d-flex align-items-center text-muted text-center justify-content-center py-5">
-            <div>
-                <i class="far fa-calendar-times fa-3x mb-3 opacity-50"></i>
-                <h6>Tidak ada jadwal mengajar pada hari ini.</h6>
+    <div class="row g-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm rounded-4 p-4">
+                <h5 class="fw-bold mb-3">Menu Cepat</h5>
+                <div class="d-flex gap-3">
+                    <a href="{{ url_for('pengajar_kuis') }}" class="btn btn-outline-primary px-4 rounded-pill menu-btn">Kelola Kuis</a>
+                    <a href="{{ url_for('pengajar_forum') }}" class="btn btn-outline-primary px-4 rounded-pill menu-btn">Forum Diskusi</a>
+                    <a href="{{ url_for('pengajar_analitik') }}" class="btn btn-outline-primary px-4 rounded-pill menu-btn">Lihat Analitik</a>
+                </div>
             </div>
         </div>
     </div>
-
 </div>
 {% endblock %}

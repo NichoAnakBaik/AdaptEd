@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+{% block title %}Kelola Kuis{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-5">
+        <div>
+            <h2 class="fw-bold text-dark"><i class="fas fa-book-open text-warning me-2"></i>Kuis & Ujian</h2>
+            <p class="text-muted mb-0">Kelola bank soal dan publikasikan kuis untuk Namsan Korean Course.</p>
+        </div>
+        <button class="btn btn-warning rounded-pill px-4 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#modalTambahKuis">
+            <i class="fas fa-plus me-2"></i>Buat Kuis Baru
+        </button>
+    </div>
+
+    <div class="row g-4">
+        {% if kuis_list %}
+            {% for q in kuis_list %}
+            <div class="col-md-6 col-xl-4">
+                <div class="card shadow-sm border-0 rounded-4 h-100 {% if q.is_published %}border-top border-success border-4{% endif %}">
+                    <div class="card-body p-4 d-flex flex-column">
+                        
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            {% if q.is_published %}
+                                <span class="badge bg-success-subtle text-success rounded-pill px-3"><i class="fas fa-check-circle me-1"></i> Terupload</span>
+                            {% else %}
+                                <span class="badge bg-secondary-subtle text-secondary rounded-pill px-3">Draft</span>
+                            {% endif %}
+                            <small class="text-muted fw-bold">{{ q.nama_kelas }}</small>
+                        </div>
+                        
+                        <h5 class="fw-bold text-dark mb-2">{{ q.judul_kuis }}</h5>
+                        <p class="small text-muted mb-4" style="height: 40px; overflow: hidden;">{{ q.deskripsi or 'Tidak ada deskripsi.' }}</p>
+                        
+                        <div class="d-flex justify-content-between align-items-center mb-3 mt-auto">
+                            <span class="small fw-bold text-primary"><i class="fas fa-tasks me-1"></i> {{ q.total_soal }} Soal</span>
+                            <span class="badge bg-light text-dark border small">{{ q.tingkat_kesulitan }}</span>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <a href="{{ url_for('pengajar_soal', id_kuis=q.id_kuis) }}" class="btn btn-outline-primary rounded-pill fw-bold py-2">
+                                <i class="fas fa-edit me-2"></i>Kelola Soal
+                            </a>
+
+                            {% if not q.is_published %}
+                                <a href="{{ url_for('publish_kuis', id_kuis=q.id_kuis) }}" 
+                                   class="btn btn-success rounded-pill fw-bold py-2 shadow-sm"
+                                   onclick="return confirm('Apakah semua soal sudah benar? Setelah di-upload, siswa bisa langsung mengerjakan.')">
+                                    <i class="fas fa-upload me-2"></i>Upload/Publish Kuis
+                                </a>
+                            {% else %}
+                                <button class="btn btn-light border rounded-pill fw-bold py-2 text-muted shadow-none" disabled>
+                                    <i class="fas fa-cloud-check text-success me-2"></i>Sudah di-Upload
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="col-12 text-center py-5">
+                <i class="fas fa-clipboard-list fa-5x text-muted mb-3 opacity-25"></i>
+                <h5 class="text-muted">Belum ada kuis. Klik "Buat Kuis Baru" di atas.</h5>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="modal fade" id="modalTambahKuis" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header border-0 pt-4 px-4">
+                <h5 class="fw-bold">Buat Kuis Baru</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST">
+                <div class="modal-body px-4">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Pilih Kelas</label>
+                        <select name="id_kelas" class="form-select rounded-3" required>
+                            {% for k in kelas_list %}
+                                <option value="{{ k.id_kelas }}">{{ k.nama_kelas }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Judul Kuis</label>
+                        <input type="text" name="judul_kuis" class="form-control rounded-3" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Tingkat Kesulitan</label>
+                        <select name="tingkat_kesulitan" class="form-select rounded-3">
+                            <option value="Mudah">Mudah</option>
+                            <option value="Sedang" selected>Sedang</option>
+                            <option value="Sulit">Sulit</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Deskripsi</label>
+                        <textarea name="description" class="form-control rounded-3" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pb-4 px-4">
+                    <button type="submit" class="btn btn-warning rounded-pill px-4 fw-bold">Simpan & Lanjut</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

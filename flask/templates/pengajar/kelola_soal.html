@@ -1,0 +1,252 @@
+{% extends 'base.html' %}
+{% block title %}Kelola Butir Soal{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/simple-keyboard@latest/build/css/index.css">
+<style>
+    .simple-keyboard {
+        max-width: 800px; 
+        display: none; 
+        position: fixed; 
+        bottom: 20px; 
+        left: 50%;
+        transform: translateX(-50%); 
+        z-index: 9999; 
+        box-shadow: 0 10px 50px rgba(0,0,0,0.3);
+        background-color: #ececec; 
+        border-radius: 15px; 
+        padding: 5px;
+    }
+    .content-wrapper { padding-bottom: 300px; }
+    .card { transition: transform 0.2s; }
+    .btn-action { width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; }
+</style>
+
+<div class="container-fluid content-wrapper">
+    <div class="d-flex align-items-center mb-4">
+        <a href="{{ url_for('pengajar_kuis') }}" class="btn btn-outline-secondary rounded-circle me-3 border-2">
+            <i class="fas fa-arrow-left"></i>
+        </a>
+        <div>
+            <h2 class="fw-bold mb-0 text-dark">Kelola Soal: {{ kuis.judul_kuis }}</h2>
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3">{{ kuis.tingkat_kesulitan }}</span>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div class="card shadow-sm border-0 rounded-4">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-4 text-primary"><i class="fas fa-plus-circle me-2"></i>Tambah Pertanyaan</h5>
+                    <form method="POST">
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Tipe Soal</label>
+                            <select name="tipe_soal" id="tipe_soal" class="form-select rounded-3 shadow-sm" onchange="toggleForm()">
+                                <option value="Pilihan Ganda">Pilihan Ganda</option>
+                                <option value="Isian">Isian / Teks</option>
+                                <option value="Suara">Suara / Speaking</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Pertanyaan</label>
+                            <textarea name="teks_soal" class="form-control rounded-3 shadow-sm use-keyboard" rows="3" required placeholder="Contoh: 안녕하세요 artinya apa?"></textarea>
+                        </div>
+
+                        <div id="section_pg">
+                            <label class="form-label small fw-bold text-secondary">Opsi Jawaban (Pilih satu yang benar)</label>
+                            {% for i in range(4) %}
+                            <div class="input-group mb-2">
+                                <div class="input-group-text bg-white border-end-0">
+                                    <input type="radio" name="jawaban_benar" value="{{ i }}" {% if i==0 %}checked{% endif %} class="form-check-input">
+                                </div>
+                                <input type="text" name="opsi[]" class="form-control border-start-0 use-keyboard" placeholder="Opsi {{ 'ABCD'[i] }}">
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <div id="section_kunci" style="display:none;">
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold text-success">Kunci Jawaban / Transkrip Korea</label>
+                                <input type="text" name="kunci_jawaban" id="kunci_input" class="form-control rounded-3 shadow-sm use-keyboard" placeholder="Masukkan teks Hangeul...">
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold">Poin</label>
+                            <input type="number" name="poin" class="form-control rounded-3 shadow-sm" value="10" required>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100 rounded-pill fw-bold py-2 shadow">
+                            <i class="fas fa-save me-2"></i>Simpan Soal
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="card shadow-sm border-0 rounded-4">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-4 text-dark">Butir Soal ({{ soal_list|length }})</h5>
+                    
+                    {% if not soal_list %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-folder-open fa-3x text-muted mb-3 opacity-25"></i>
+                        <p class="text-muted">Belum ada soal. Silakan tambah di form sebelah kiri.</p>
+                    </div>
+                    {% endif %}
+
+                    {% for s in soal_list %}
+                    <div class="border-bottom mb-4 pb-3">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <span class="badge bg-secondary-subtle text-secondary rounded-pill mb-2 px-3">{{ s.tipe_soal }}</span>
+                            <div class="d-flex gap-1">
+                                <button class="btn btn-action btn-outline-primary border-0" data-bs-toggle="modal" data-bs-target="#editModal{{ s.id_soal }}">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <a href="{{ url_for('hapus_soal', id_soal=s.id_soal, id_kuis=kuis.id_kuis) }}" class="btn btn-action btn-outline-danger border-0" onclick="return confirm('Hapus soal ini?')">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </div>
+                        </div>
+                        
+                        <p class="fw-bold text-dark mb-2">{{ loop.index }}. {{ s.teks_soal }}</p>
+                        
+                        {% if s.opsi %}
+                            <div class="ms-3 mb-3 p-2 bg-light rounded-3">
+                            {% for o in s.opsi %}
+                                <div class="small py-1 {% if o.is_benar %}text-success fw-bold{% else %}text-muted{% endif %}">
+                                    <i class="fas {% if o.is_benar %}fa-check-circle{% else %}fa-circle{% endif %} me-2"></i>
+                                    {{ "ABCD"[loop.index0] }}. {{ o.teks_opsi }}
+                                </div>
+                            {% endfor %}
+                            </div>
+                        {% endif %}
+
+                        {% if s.kunci_jawaban %}
+                        <div class="small bg-success-subtle text-success p-2 rounded-3 border border-success-subtle">
+                            <i class="fas fa-key me-2"></i>Kunci: <b>{{ s.kunci_jawaban }}</b>
+                        </div>
+                        {% endif %}
+                        <div class="mt-2 small text-muted text-end">Bobot: {{ s.poin }} Poin</div>
+                    </div>
+
+                    <div class="modal fade" id="editModal{{ s.id_soal }}" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content rounded-4 border-0 shadow-lg">
+                                <div class="modal-header border-0 pb-0">
+                                    <h5 class="fw-bold text-primary">Edit Soal #{{ loop.index }}</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <form action="{{ url_for('edit_soal', id_soal=s.id_soal, id_kuis=kuis.id_kuis) }}" method="POST">
+                                    <div class="modal-body p-4">
+                                        <input type="hidden" name="tipe_soal" value="{{ s.tipe_soal }}">
+                                        
+                                        <div class="mb-3">
+                                            <label class="small fw-bold mb-1">Pertanyaan</label>
+                                            <textarea name="teks_soal" class="form-control rounded-3 use-keyboard" required>{{ s.teks_soal }}</textarea>
+                                        </div>
+
+                                        {% if s.tipe_soal == 'Pilihan Ganda' %}
+                                            <label class="small fw-bold mb-2">Opsi Jawaban</label>
+                                            {% for o in s.opsi %}
+                                            <div class="input-group mb-2">
+                                                <div class="input-group-text bg-white">
+                                                    <input type="radio" name="jawaban_benar" value="{{ loop.index0 }}" {% if o.is_benar %}checked{% endif %} class="form-check-input">
+                                                </div>
+                                                <input type="text" name="opsi[]" class="form-control use-keyboard" value="{{ o.teks_opsi }}">
+                                            </div>
+                                            {% endfor %}
+                                        {% else %}
+                                            <div class="mb-3">
+                                                <label class="small fw-bold mb-1">Kunci / Transkrip</label>
+                                                <input type="text" name="kunci_jawaban" class="form-control rounded-3 use-keyboard" value="{{ s.kunci_jawaban }}">
+                                            </div>
+                                        {% endif %}
+
+                                        <div class="mb-0">
+                                            <label class="small fw-bold mb-1">Poin</label>
+                                            <input type="number" name="poin" class="form-control rounded-3" value="{{ s.poin }}">
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer border-0 pt-0">
+                                        <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Batal</button>
+                                        <button type="submit" class="btn btn-primary rounded-pill px-4 shadow">Simpan Perubahan</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="simple-keyboard"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/simple-keyboard@latest/build/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/simple-keyboard-layouts@latest/build/index.js"></script>
+
+<script>
+    // Fungsi Switch Input Form
+    function toggleForm() {
+        const tipe = document.getElementById('tipe_soal').value;
+        const sectionPG = document.getElementById('section_pg');
+        const sectionKunci = document.getElementById('section_kunci');
+        
+        if (tipe === 'Pilihan Ganda') {
+            sectionPG.style.display = 'block';
+            sectionKunci.style.display = 'none';
+        } else {
+            sectionPG.style.display = 'none';
+            sectionKunci.style.display = 'block';
+        }
+    }
+
+    // Inisialisasi Keyboard Virtual
+    document.addEventListener("DOMContentLoaded", function() {
+        const Keyboard = window.SimpleKeyboard.default;
+        const KeyboardLayouts = window.SimpleKeyboardLayouts.default;
+        const layout = new KeyboardLayouts().get("korean");
+        let selectedInput = null;
+
+        const myKeyboard = new Keyboard({
+            onChange: input => { 
+                if(selectedInput) { 
+                    selectedInput.value = input; 
+                    // Trigger input event agar validasi form tetap sinkron
+                    selectedInput.dispatchEvent(new Event('input', { bubbles: true })); 
+                } 
+            },
+            onKeyPress: button => { 
+                if(button === "{shift}" || button === "{lock}") {
+                    let shiftToggle = myKeyboard.options.layoutName === "default" ? "shift" : "default";
+                    myKeyboard.setOptions({ layoutName: shiftToggle });
+                } 
+            },
+            ...layout
+        });
+
+        // Event delegation: Mendeteksi fokus pada semua elemen dengan class .use-keyboard
+        // Termasuk elemen yang baru muncul di dalam Modal
+        document.addEventListener("focusin", (e) => {
+            if (e.target.classList.contains("use-keyboard")) {
+                selectedInput = e.target;
+                document.querySelector(".simple-keyboard").style.display = "block";
+                myKeyboard.setInput(e.target.value);
+            }
+        });
+
+        // Tutup keyboard jika klik di luar area keyboard atau input terkait
+        document.addEventListener("mousedown", (e) => {
+            const kb = document.querySelector(".simple-keyboard");
+            if (kb && !kb.contains(e.target) && !e.target.classList.contains("use-keyboard")) {
+                kb.style.display = "none";
+            }
+        });
+    });
+</script>
+{% endblock %}

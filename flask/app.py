@@ -1,11 +1,13 @@
 import os
 import psycopg2
 import psycopg2.extras
+import json
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, session, flash, g, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
+
 
 load_dotenv()
 
@@ -178,18 +180,43 @@ def dashboard_siswa():
     
     return render_template('siswa/dashboard_siswa.html', lulus_modul=lulus_modul, kelas=kelas_info)
 
-@app.route('/dashboard_pengajar')
-def dashboard_pengajar():
-    if session.get('role') != 'pengajar': return redirect(url_for('login'))
+# Pastikan rute ini yang dipanggil di browser: /pengajar/dashboard
+@app.route('/pengajar/dashboard')
+def dashboard_pengajar(): # Nama fungsi ini harus sinkron dengan url_for nanti
+    if session.get('role') != 'pengajar':
+        return redirect(url_for('login'))
+        
     db = get_db()
-    cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute("SELECT * FROM kelas WHERE id_pengajar = %s", (session['user_id'],))
-    kelas_list = cur.fetchall()
-    return render_template('pengajar/dashboard_pengajar.html', kelas_list=kelas_list)
+    cur = db.cursor()
+    uid = session.get('user_id')
+
+    # Query Kelas
+    cur.execute("SELECT COUNT(*) FROM kelas WHERE id_pengajar = %s", (uid,))
+    k = cur.fetchone()[0]
+
+    # Query Kuis
+    cur.execute("""
+        SELECT COUNT(*) FROM kuis q 
+        JOIN kelas k ON q.id_kelas = k.id_kelas 
+        WHERE k.id_pengajar = %s
+    """, (uid,))
+    q = cur.fetchone()[0]
+    
+    cur.close()
+
+    data_dashboard = {
+        'total_kelas': int(k),
+        'total_kuis': int(q),
+        'nama_user': session.get('nama_lengkap', 'Seonsaengnim')
+    }
+
+    # Pastikan file fisiknya bernama: templates/pengajar/dashboard_pengajar.html
+    return render_template('pengajar/dashboard_pengajar.html', data=data_dashboard)
 
 # ==============================================================================
 # PENGAJAR
 # ==============================================================================
+
 @app.route('/pengajar/kelas')
 def pengajar_kelas():
     if session.get('role') != 'pengajar': 
@@ -343,27 +370,336 @@ def pengajar_sertifikat():
 
 @app.route('/pengajar/modul')
 def pengajar_modul():
-    if session.get('role') != 'pengajar': return redirect(url_for('login'))
-    # TODO: Tampilkan modul (View Only)
-    return render_template('pengajar/pantau_modul.html')
+    if session.get('role') != 'pengajar': 
+        return redirect(url_for('login'))
+        
+    db = get_db()
+    cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    id_pengajar = session.get('user_id')
+
+    # 1. Ambil kelas yang diampu pengajar
+    cur.execute("SELECT id_kelas, nama_kelas, level_bahasa FROM kelas WHERE id_pengajar = %s", (id_pengajar,))
+    kelas_list = cur.fetchall()
+
+    # 2. Ambil semua modul (PDF) untuk kelas-kelas tersebut
+    cur.execute("""
+        SELECT m.*, k.nama_kelas 
+        FROM materi m
+        JOIN kelas k ON m.id_kelas = k.id_kelas
+        WHERE k.id_pengajar = %s
+        ORDER BY m.urutan ASC
+    """, (id_pengajar,))
+    materi_list = cur.fetchall()
+
+    # 3. Ambil semua audio pendukung
+    cur.execute("""
+        SELECT ma.* FROM materi_audio ma
+        JOIN materi m ON ma.id_materi = m.id_materi
+        JOIN kelas k ON m.id_kelas = k.id_kelas
+        WHERE k.id_pengajar = %s
+    """, (id_pengajar,))
+    audio_list = cur.fetchall()
+
+    # 4. Kelompokkan data (Materi ke Kelas, Audio ke Materi)
+    for m in materi_list:
+        m['audios'] = [a for a in audio_list if a['id_materi'] == m['id_materi']]
+    
+    for k in kelas_list:
+        k['modul'] = [m for m in materi_list if m['id_kelas'] == k['id_kelas']]
+
+    cur.close()
+    return render_template('pengajar/pantau_modul.html', kelas_list=kelas_list)
 
 @app.route('/pengajar/kuis', methods=['GET', 'POST'])
 def pengajar_kuis():
     if session.get('role') != 'pengajar': return redirect(url_for('login'))
-    # TODO: CRUD Kuis (PG, Isian, Suara, Tingkat Kesulitan)
-    return render_template('pengajar/kelola_kuis.html')
+    db = get_db()
+    cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    user_id = session.get('user_id')
+
+    if request.method == 'POST':
+        # Logika simpan kuis baru
+        id_kelas = request.form.get('id_kelas')
+        judul = request.form.get('judul_kuis')
+        desc = request.form.get('description')
+        level = request.form.get('tingkat_kesulitan')
+        cur.execute("INSERT INTO kuis (id_kelas, judul_kuis, deskripsi, tingkat_kesulitan, is_published) VALUES (%s, %s, %s, %s, FALSE)", (id_kelas, judul, desc, level))
+        db.commit()
+        return redirect(url_for('pengajar_kuis'))
+
+    # AMBIL SEMUA KUIS (Tanpa filter pengajar dulu untuk ngetes apakah data muncul)
+    cur.execute("""
+        SELECT q.*, k.nama_kelas, 
+        (SELECT COUNT(*) FROM soal_kuis s WHERE s.id_kuis = q.id_kuis) as total_soal 
+        FROM kuis q 
+        JOIN kelas k ON q.id_kelas = k.id_kelas
+    """)
+    kuis_list = cur.fetchall()
+
+    cur.execute("SELECT id_kelas, nama_kelas FROM kelas")
+    kelas_list = cur.fetchall()
+    
+    cur.close()
+    return render_template('pengajar/kelola_kuis.html', kuis_list=kuis_list, kelas_list=kelas_list)
+
+@app.route('/pengajar/kuis/publish/<int:id_kuis>')
+def publish_kuis(id_kuis):
+    # Keamanan: Pastikan hanya pengajar yang bisa akses
+    if session.get('role') != 'pengajar': 
+        return redirect(url_for('login'))
+        
+    db = get_db()
+    cur = db.cursor()
+    
+    # Validasi: Cek apakah kuis sudah punya soal atau belum
+    cur.execute("SELECT COUNT(*) FROM soal_kuis WHERE id_kuis = %s", (id_kuis,))
+    jumlah_soal = cur.fetchone()[0]
+    
+    if jumlah_soal > 0:
+        # Update status menjadi TRUE
+        cur.execute("UPDATE kuis SET is_published = TRUE WHERE id_kuis = %s", (id_kuis,))
+        db.commit()
+        flash("Kuis berhasil di-publish! Sekarang siswa dapat melihat dan mengerjakan kuis ini.", "success")
+    else:
+        # Jika soal masih 0, jangan izinkan publish
+        flash("Gagal! Kamu tidak bisa mempublikasikan kuis yang belum ada soalnya.", "danger")
+        
+    cur.close()
+    # Lempar balik ke halaman daftar kuis
+    return redirect(url_for('pengajar_kuis'))
+
+@app.route('/pengajar/kuis/soal/<int:id_kuis>', methods=['GET', 'POST'])
+def pengajar_soal(id_kuis):
+    if session.get('role') != 'pengajar': return redirect(url_for('login'))
+    db = get_db()
+    cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    # LOGIKA TAMBAH SOAL
+    if request.method == 'POST':
+        tipe = request.form.get('tipe_soal')
+        teks = request.form.get('teks_soal')
+        kunci = request.form.get('kunci_jawaban')
+        poin = request.form.get('poin')
+
+        cur.execute("""
+            INSERT INTO soal_kuis (id_kuis, tipe_soal, teks_soal, kunci_jawaban, poin)
+            VALUES (%s, %s, %s, %s, %s) RETURNING id_soal
+        """, (id_kuis, tipe, teks, kunci, poin))
+        id_soal = cur.fetchone()['id_soal']
+
+        if tipe == 'Pilihan Ganda':
+            opsis = request.form.getlist('opsi[]')
+            jawaban_benar = request.form.get('jawaban_benar')
+            for index, teks_opsi in enumerate(opsis):
+                if teks_opsi.strip():
+                    is_benar = (str(index) == jawaban_benar)
+                    cur.execute("INSERT INTO opsi_pg (id_soal, teks_opsi, is_benar) VALUES (%s, %s, %s)", 
+                                (id_soal, teks_opsi, is_benar))
+        db.commit()
+        flash("Soal berhasil ditambahkan!", "success")
+        return redirect(url_for('pengajar_soal', id_kuis=id_kuis))
+
+    # TAMPILAN HALAMAN
+    cur.execute("SELECT * FROM kuis WHERE id_kuis = %s", (id_kuis,))
+    kuis_info = cur.fetchone()
+
+    cur.execute("""
+        SELECT s.*, 
+        (SELECT json_agg(o ORDER BY o.id_opsi) FROM opsi_pg o WHERE o.id_soal = s.id_soal) as opsi
+        FROM soal_kuis s 
+        WHERE s.id_kuis = %s 
+        ORDER BY s.id_soal ASC
+    """, (id_kuis,))
+    soal_list = cur.fetchall()
+    cur.close()
+    return render_template('pengajar/kelola_soal.html', kuis=kuis_info, soal_list=soal_list)
+
+@app.route('/pengajar/kuis/edit_soal/<int:id_soal>/<int:id_kuis>', methods=['POST'])
+def edit_soal(id_soal, id_kuis):
+    db = get_db()
+    cur = db.cursor()
+    teks = request.form.get('teks_soal')
+    kunci = request.form.get('kunci_jawaban')
+    poin = request.form.get('poin')
+    tipe = request.form.get('tipe_soal')
+
+    cur.execute("UPDATE soal_kuis SET teks_soal = %s, kunci_jawaban = %s, poin = %s WHERE id_soal = %s", 
+                (teks, kunci, poin, id_soal))
+
+    if tipe == 'Pilihan Ganda':
+        cur.execute("DELETE FROM opsi_pg WHERE id_soal = %s", (id_soal,))
+        opsis = request.form.getlist('opsi[]')
+        jawaban_benar = request.form.get('jawaban_benar')
+        for index, teks_opsi in enumerate(opsis):
+            if teks_opsi.strip():
+                is_benar = (str(index) == jawaban_benar)
+                cur.execute("INSERT INTO opsi_pg (id_soal, teks_opsi, is_benar) VALUES (%s, %s, %s)", (id_soal, teks_opsi, is_benar))
+    db.commit()
+    cur.close()
+    flash("Soal berhasil diperbarui!", "success")
+    return redirect(url_for('pengajar_soal', id_kuis=id_kuis))
+
+@app.route('/pengajar/kuis/hapus_soal/<int:id_soal>/<int:id_kuis>')
+def hapus_soal(id_soal, id_kuis):
+    db = get_db()
+    cur = db.cursor()
+    cur.execute("DELETE FROM soal_kuis WHERE id_soal = %s", (id_soal,))
+    db.commit()
+    cur.close()
+    flash("Soal dihapus.", "warning")
+    return redirect(url_for('pengajar_soal', id_kuis=id_kuis))
 
 @app.route('/pengajar/forum')
 def pengajar_forum():
     if session.get('role') != 'pengajar': return redirect(url_for('login'))
-    # TODO: Forum khusus kelas yang dia ajar
-    return render_template('pengajar/forum_kelas.html')
+    db = get_db()
+    cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    id_pengajar = session.get('user_id')
+
+    # Pengajar hanya melihat forum dari kelas yang dia ajar
+    cur.execute("SELECT id_kelas, nama_kelas FROM kelas WHERE id_pengajar = %s", (id_pengajar,))
+    kelas_list = cur.fetchall()
+    cur.close()
+    return render_template('pengajar/forum_list.html', kelas_list=kelas_list)
+
+@app.route('/pengajar/forum/kelas/<int:id_kelas>', methods=['GET', 'POST'])
+def forum_detail(id_kelas):
+    if session.get('role') != 'pengajar': return redirect(url_for('login'))
+    db = get_db()
+    cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    
+    # 1. Ambil info kelas (untuk judul halaman)
+    cur.execute("SELECT nama_kelas FROM kelas WHERE id_kelas = %s", (id_kelas,))
+    kelas = cur.fetchone()
+
+    # 2. Logika jika ada postingan baru (POST)
+    if request.method == 'POST':
+        judul = request.form.get('judul')
+        pesan = request.form.get('pesan')
+        cur.execute("""
+            INSERT INTO forum_diskusi (id_kelas, id_penulis, judul, pesan) 
+            VALUES (%s, %s, %s, %s)
+        """, (id_kelas, session['user_id'], judul, pesan))
+        db.commit()
+        # Setelah posting, redirect ke halaman yang sama agar tidak double post saat refresh
+        return redirect(url_for('forum_detail', id_kelas=id_kelas))
+
+    # 3. AMBIL DAFTAR DISKUSI (Harus di luar blok IF agar diskusi_list terdefinisi)
+    # Pastikan query ini benar dan id_diskusi sesuai dengan di DB
+    cur.execute("""
+        SELECT d.*, u.nama_lengkap as penulis,
+        (SELECT COUNT(*) FROM forum_komentar k WHERE k.id_diskusi = d.id_diskusi) as jml_komentar
+        FROM forum_diskusi d
+        JOIN users u ON d.id_penulis = u.id
+        WHERE d.id_kelas = %s 
+        ORDER BY d.created_at DESC
+    """, (id_kelas,))
+    diskusi_list = cur.fetchall() # Di sini variabel didefinisikan
+    
+    cur.close()
+    
+    # Sekarang diskusi_list pasti sudah ada isinya (minimal list kosong [])
+    return render_template('pengajar/forum_detail.html', 
+                           diskusi_list=diskusi_list, 
+                           kelas=kelas, 
+                           id_kelas=id_kelas)
+
+@app.route('/pengajar/forum/diskusi/<int:id_diskusi>', methods=['GET', 'POST'])
+def diskusi_komentar(id_diskusi):
+    if session.get('role') != 'pengajar': return redirect(url_for('login'))
+    db = get_db()
+    cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    if request.method == 'POST':
+        isi = request.form.get('isi_komentar')
+        cur.execute("INSERT INTO forum_komentar (id_diskusi, id_penulis, isi_komentar) VALUES (%s, %s, %s)",
+                    (id_diskusi, session['user_id'], isi))
+        db.commit()
+        return redirect(url_for('diskusi_komentar', id_diskusi=id_diskusi))
+
+    # Ambil postingan utama
+    cur.execute("""
+        SELECT d.*, u.nama_lengkap as penulis 
+        FROM forum_diskusi d 
+        JOIN users u ON d.id_penulis = u.id 
+        WHERE d.id_diskusi = %s
+    """, (id_diskusi,))
+    diskusi = cur.fetchone()
+
+    # Ambil semua komentar
+    cur.execute("""
+        SELECT k.*, u.nama_lengkap as penulis 
+        FROM forum_komentar k 
+        JOIN users u ON k.id_penulis = u.id 
+        WHERE k.id_diskusi = %s ORDER BY k.created_at ASC
+    """, (id_diskusi,))
+    komentar_list = cur.fetchall()
+
+    cur.close()
+    return render_template('pengajar/forum_komentar.html', diskusi=diskusi, komentar_list=komentar_list)
 
 @app.route('/pengajar/analitik')
 def pengajar_analitik():
-    if session.get('role') != 'pengajar': return redirect(url_for('login'))
-    # TODO: Grafik analitik jawaban siswa untuk AI
-    return render_template('pengajar/analitik_kelas.html')
+    if session.get('role') != 'pengajar':
+        return redirect(url_for('login'))
+        
+    db = get_db()
+    cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    id_pengajar = session.get('user_id')
+
+    # 1. Statistik Ringkas: Total Kelas & Total Siswa Unik
+    cur.execute("SELECT COUNT(*) as jml FROM kelas WHERE id_pengajar = %s", (id_pengajar,))
+    total_kelas = cur.fetchone()['jml']
+
+    cur.execute("""
+        SELECT COUNT(DISTINCT sk.id_siswa) as jml 
+        FROM siswa_kelas sk
+        JOIN kelas k ON sk.id_kelas = k.id_kelas
+        WHERE k.id_pengajar = %s
+    """, (id_pengajar,))
+    total_siswa = cur.fetchone()['jml']
+
+    # 2. Query Data Grafik: Rata-rata Nilai per Kuis
+    # Kita gunakan COALESCE agar kuis yang belum ada nilainya tetap muncul sebagai 0
+    cur.execute("""
+        SELECT q.judul_kuis, COALESCE(AVG(n.skor), 0) as rata_rata
+        FROM kuis q
+        LEFT JOIN nilai_kuis n ON q.id_kuis = n.id_kuis
+        JOIN kelas k ON q.id_kelas = k.id_kelas
+        WHERE k.id_pengajar = %s
+        GROUP BY q.id_kuis, q.judul_kuis, q.created_at
+        ORDER BY q.created_at ASC
+    """, (id_pengajar,))
+    
+    chart_data_raw = cur.fetchall()
+    
+    # Parsing data untuk Chart.js (Sangat Penting!)
+    chart_labels = [row['judul_kuis'] for row in chart_data_raw]
+    chart_values = [float(row['rata_rata']) for row in chart_data_raw]
+
+    # 3. Daftar Kuis dengan Partisipasi (Tabel Ringkasan)
+    cur.execute("""
+        SELECT q.judul_kuis, k.nama_kelas, 
+               COUNT(n.id_nilai) as jumlah_mengerjakan,
+               COALESCE(AVG(n.skor), 0) as rata_skor
+        FROM kuis q
+        JOIN kelas k ON q.id_kelas = k.id_kelas
+        LEFT JOIN nilai_kuis n ON q.id_kuis = n.id_kuis
+        WHERE k.id_pengajar = %s
+        GROUP BY q.id_kuis, q.judul_kuis, k.nama_kelas
+        ORDER BY jumlah_mengerjakan DESC
+        LIMIT 5
+    """, (id_pengajar,))
+    top_kuis = cur.fetchall()
+
+    cur.close()
+
+    return render_template('pengajar/analitik.html', 
+                           total_kelas=total_kelas, 
+                           total_siswa=total_siswa,
+                           chart_labels=chart_labels, 
+                           chart_values=chart_values,
+                           top_kuis=top_kuis)
 
 # ==============================================================================
 # 4. MODUL & MATERI (Admin Upload, Siswa View)

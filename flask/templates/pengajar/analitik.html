@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard Analitik Pengajar{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="mb-4">
+        <h2 class="fw-bold text-dark"><i class="fas fa-chart-line text-primary me-2"></i>Analitik Performa</h2>
+        <p class="text-muted">Pantau progres belajar dan rata-rata pencapaian siswa di Namsan Korean Course.</p>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-primary text-white">
+                <div class="card-body">
+                    <small class="opacity-75">Total Kelas Diampu</small>
+                    <h2 class="fw-bold mb-0">{{ total_kelas }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-success text-white">
+                <div class="card-body">
+                    <small class="opacity-75">Total Siswa Aktif</small>
+                    <h2 class="fw-bold mb-0">{{ total_siswa }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-4">Tren Rata-rata Nilai Kuis</h5>
+                    <canvas id="performanceChart" height="150"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-4">Ringkasan Kuis</h5>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr class="small">
+                                    <th>Kuis</th>
+                                    <th>Siswa</th>
+                                    <th>Rerata</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for t in top_kuis %}
+                                <tr>
+                                    <td class="small fw-bold">{{ t.judul_kuis }}</td>
+                                    <td><span class="badge bg-light text-dark border">{{ t.jumlah_mengerjakan }}</span></td>
+                                    <td class="text-success fw-bold">{{ "%.1f"|format(t.rata_skor or 0) }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const ctx = document.getElementById('performanceChart').getContext('2d');
+        
+        // Ambil data langsung dari Flask
+        const labels = (( chart_labels , safe ));
+        const dataValues = (( chart_values , safe ));
+
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Rata-rata Skor',
+                    data: dataValues,
+                    borderColor: '#0d6efd',
+                    backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 5,
+                    pointBackgroundColor: '#0d6efd'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { 
+                        beginAtZero: true, 
+                        max: 100,
+                        ticks: { stepSize: 20 }
+                    },
+                    x: { grid: { display: false } }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        }); 
+    });
+</script>
+{% endblock %}

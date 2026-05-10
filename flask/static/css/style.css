@@ -188,3 +188,17 @@
     background-color: var(--secondary);
     color: white;
 }
+
+.simple-keyboard {
+    max-width: 800px;
+    margin: 20px auto;
+    display: none; /* Sembunyikan dulu, muncul saat input diklik */
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    box-shadow: 0 10px 50px rgba(0,0,0,0.3);
+    background-color: #ececec;
+    border-radius: 10px;
+}
