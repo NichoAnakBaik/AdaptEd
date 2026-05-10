@@ -32,19 +32,50 @@
              ============================================== -->
         {% if session.get('role') == 'admin' %}
         <li><a class="nav-link" href="{{ url_for('dashboard_admin') }}"><i class="fas fa-border-all"></i><span>Dashboard Admin</span></a></li>
-        <li><a class="nav-link" href="#"><i class="fas fa-users"></i><span>Data Pengguna</span></a></li>
-        <li><a class="nav-link" href="#"><i class="fas fa-layer-group"></i><span>Manajemen Level 1-5</span></a></li>
+        <li><a class="nav-link" href="{{ url_for('manage_users') }}"><i class="fas fa-users"></i><span>Kelola Pengguna</span></a></li>
+        <li><a class="nav-link" href="{{ url_for('admin_kelas') }}"><i class="fas fa-university"></i><span>Manajemen Kelas</span></a></li>
+        <li><a class="nav-link" href="{{ url_for('admin_modul') }}"><i class="fas fa-book"></i><span>Upload Modul Belajar</span></a></li>
+        <li><a class="nav-link" href="{{ url_for('admin_sertifikat') }}"><i class="fas fa-certificate"></i><span>Approval Sertifikat</span></a></li>
+        <li><a class="nav-link" href="{{ url_for('admin_forum') }}"><i class="fas fa-comments"></i><span>Pantau Forum</span></a></li>
+        <li><a class="nav-link" href="{{ url_for('admin_enrollment') }}"><i class="fas fa-user-graduate"></i><span>Plotting Siswa</span></a>
+      </li>
         
         <!-- ==============================================
              MENU UNTUK PENGAJAR
              ============================================== -->
         {% elif session.get('role') == 'pengajar' %}
-        <li><a class="nav-link" href="{{ url_for('dashboard_pengajar') }}"><i class="fas fa-border-all"></i><span>Dashboard</span></a></li>
-        <li><a class="nav-link" href="#"><i class="fas fa-users-class"></i><span>Data Siswa & Kelas</span></a></li>
-        <li><a class="nav-link" href="{{ url_for('materi') }}"><i class="fas fa-book"></i><span>Kelola Modul</span></a></li>
-        <li><a class="nav-link" href="{{ url_for('kuis_pengajar') }}"><i class="fas fa-tasks"></i><span>Kuis & Ujian</span></a></li>
-        <li><a class="nav-link" href="#"><i class="fas fa-comments"></i><span>Forum Kelas</span></a></li>
-        <li><a class="nav-link" href="#"><i class="fas fa-chart-pie"></i><span>Analitik Kelas</span></a></li>
+        <li class="px-3 mt-4 mb-2 text-uppercase text-muted fw-bold" style="font-size: 0.75rem; letter-spacing: 1px;">Menu Pengajar</li>
+        
+        <li>
+            <a class="nav-link {% if request.endpoint == 'dashboard_pengajar' %}active{% endif %}" href="{{ url_for('dashboard_pengajar') }}">
+                <i class="fas fa-home"></i><span>Dashboard</span>
+            </a>
+        </li>
+        <li>
+            <a class="nav-link {% if request.endpoint == 'pengajar_kelas' %}active{% endif %}" href="{{ url_for('pengajar_kelas') }}">
+                <i class="fas fa-users"></i><span>Kelas & Siswa</span>
+            </a>
+        </li>
+        <li>
+            <a class="nav-link {% if request.endpoint == 'pengajar_modul' %}active{% endif %}" href="{{ url_for('pengajar_modul') }}">
+                <i class="fas fa-book-reader"></i><span>Pantau Modul</span>
+            </a>
+        </li>
+        <li>
+            <a class="nav-link {% if request.endpoint == 'pengajar_kuis' %}active{% endif %}" href="{{ url_for('pengajar_kuis') }}">
+                <i class="fas fa-spell-check"></i><span>Kuis & Ujian</span>
+            </a>
+        </li>
+        <li>
+            <a class="nav-link {% if request.endpoint == 'pengajar_forum' %}active{% endif %}" href="{{ url_for('pengajar_forum') }}">
+                <i class="fas fa-comments"></i><span>Forum Kelas</span>
+            </a>
+        </li>
+        <li>
+            <a class="nav-link {% if request.endpoint == 'pengajar_analitik' %}active{% endif %}" href="{{ url_for('pengajar_analitik') }}">
+                <i class="fas fa-chart-pie"></i><span>Analitik Kelas</span>
+            </a>
+        </li>
 
         <!-- ==============================================
              MENU UNTUK SISWA
@@ -79,19 +110,24 @@
   <!-- Main Content Area -->
   <div class="main-content">
     <header class="top-bar">
-        <!-- Search bar agar tetap mengikuti Mockup -->
-        <div class="search-bar d-none d-md-block">
-            <i class="fas fa-search"></i>
-            <input type="text" placeholder="Pencarian cepat...">
-        </div>
+      <div class="d-flex align-items-center gap-3 ms-auto">
+        <button class="btn btn-light rounded-circle shadow-sm border"><i class="far fa-bell text-muted"></i></button>
         
-        <div class="d-flex align-items-center gap-3 ms-auto">
-            <button class="btn btn-light rounded-circle shadow-sm border"><i class="far fa-bell text-muted"></i></button>
-            <div class="d-none d-sm-block text-end ms-2 border-start ps-3">
-                <div class="fw-bold text-dark" style="font-size: 14px;">Level Saat Ini</div>
-                <div class="small text-primary fw-bold">Level 1 (Beginner)</div> <!-- Placeholder Level -->
-            </div>
+        <div class="d-none d-sm-block text-end ms-2 border-start ps-3">
+            {% if session.get('role') == 'siswa' %}
+                <div class="fw-bold text-dark" style="font-size: 14px;">Kelas Saat Ini</div>
+                <div class="small text-primary fw-bold">{{ user_level | default('Belum Terdaftar') }}</div>
+            
+            {% elif session.get('role') == 'pengajar' %}
+                <div class="fw-bold text-dark" style="font-size: 14px;">Hak Akses</div>
+                <div class="small text-primary fw-bold"><i class="fas fa-chalkboard-teacher me-1"></i> Pengajar</div>
+            
+            {% elif session.get('role') == 'admin' %}
+                <div class="fw-bold text-dark" style="font-size: 14px;">Hak Akses</div>
+                <div class="small text-danger fw-bold"><i class="fas fa-shield-alt me-1"></i> Administrator</div>
+            {% endif %}
         </div>
+    </div>
     </header>
 
     <main class="content-area">
