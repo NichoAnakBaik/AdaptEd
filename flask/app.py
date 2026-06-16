@@ -19,9 +19,13 @@ api_key_gemini = os.environ.get("GEMINI_API_KEY")
 ai_core = AdaptEdAI(gemini_api_key=api_key_gemini)
 
 # Konfigurasi Upload
-UPLOAD_FOLDER = 'static/uploads'
+# Di Vercel, filesystem bersifat read-only kecuali folder /tmp
+UPLOAD_FOLDER = '/tmp/uploads' if os.environ.get('VERCEL') == '1' else 'static/uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+try:
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+except OSError:
+    pass
 
 # ==============================================================================
 # 1. DATABASE CONNECTION
@@ -897,7 +901,7 @@ def admin_absensi():
     return render_template('admin/pantau_absensi.html', riwayat=all_logs)
 
 
-UPLOAD_CERT_FOLDER = os.path.join('static', 'uploads', 'sertifikat')
+UPLOAD_CERT_FOLDER = os.path.join('/tmp', 'uploads', 'sertifikat') if os.environ.get('VERCEL') == '1' else os.path.join('static', 'uploads', 'sertifikat')
 
 # ==============================================================================
 # A. SISI SISWA: Hanya melihat sertifikat yang SUDAH DI-ACC oleh Admin
