@@ -39,9 +39,13 @@
                                     <small class="text-muted">Kategori: {{ m.tipe_materi }}</small>
                                 </div>
                                 <div class="col-auto">
-                                    <a href="{{ url_for('lihat_materi', id_materi=m.id_materi) }}" class="btn btn-outline-primary btn-sm rounded-pill px-3">
+                                    {% if m.file_pdf %}
+                                    <a href="{{ url_for('static', filename='uploads/' ~ m.file_pdf) }}" class="btn btn-outline-primary btn-sm rounded-pill px-3" target="_blank">
                                         Buka Materi
                                     </a>
+                                    {% else %}
+                                    <span class="text-muted small">Tidak ada file</span>
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>

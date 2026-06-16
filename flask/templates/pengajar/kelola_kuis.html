@@ -74,7 +74,7 @@
                 <h5 class="fw-bold">Buat Kuis Baru</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" action="{{ url_for('pengajar_tambah_kuis') }}">
                 <div class="modal-body px-4">
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Pilih Kelas</label>
@@ -98,7 +98,7 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Deskripsi</label>
-                        <textarea name="description" class="form-control rounded-3" rows="3"></textarea>
+                        <textarea name="deskripsi" class="form-control rounded-3" rows="3"></textarea>
                     </div>
                 </div>
                 <div class="modal-footer border-0 pb-4 px-4">

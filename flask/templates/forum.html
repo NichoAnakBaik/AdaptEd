@@ -75,8 +75,13 @@
                                     <small class="text-muted" style="font-size: 10px;">{{ c.created_at.strftime('%H:%M') if c.created_at else '' }}</small>
                                 </div>
 
-                                <div class="p-3 rounded-4 shadow-sm text-dark position-relative chat-bubble" 
-                                     style="font-size: 14px; min-width: 180px; max-width: 75%; {% if id_my_own_chat and session.get('role') != 'admin' %}background-color: #e2efff; border-top-right-radius: 0;{% else %}background-color: #ffffff; border-top-left-radius: 0;{% endif %}">
+                                <div class="p-3 rounded-4 shadow-sm text-dark position-relative chat-bubble 
+                                        {% if id_my_own_chat and session.get('role') != 'admin' %}
+                                            my-chat
+                                        {% else %}
+                                            other-chat
+                                        {% endif %}"
+                                        style="font-size: 14px; min-width: 180px; max-width: 75%;">
                                     
                                     {% if c.parent_id and c.pesan_balasan %}
                                         <div class="p-2 mb-2 rounded bg-secondary bg-opacity-10 border-start border-primary border-3" style="font-size: 12px;">
@@ -94,7 +99,7 @@
                                         </button>
                                         {% endif %}
                                         
-                                        {% if session.get('role') in ['admin', 'pengajar'] or is_my_own_chat %}
+                                        {% if session.get('role') in ['admin'] or is_my_own_chat %}
                                         <form action="{{ url_for('forum_hapus_pesan', id_chat=c.id_chat) }}" method="POST" onsubmit="return confirm('Hapus pesan ini?');" style="display: inline;">
                                             <input type="hidden" name="id_materi" value="{{ id_materi_aktif }}">
                                             <button type="submit" class="btn btn-sm p-0 text-danger border-0 bg-transparent">

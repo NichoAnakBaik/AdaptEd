@@ -4,7 +4,7 @@
 {% block content %}
 <div class="container-fluid">
     <div class="d-flex align-items-center mb-4">
-        <a href="{{ url_for('pengajar_kelas') }}" class="btn btn-outline-secondary rounded-circle me-3 border-2"><i class="fas fa-arrow-left"></i></a>
+        <a href="{{ url_for('pengajar_kelas_siswa') }}" class="btn btn-outline-secondary rounded-circle me-3 border-2"><i class="fas fa-arrow-left"></i></a>
         <div>
             <h2 class="fw-bold mb-0">Progres Belajar: {{ info.nama_lengkap }}</h2>
             <p class="text-muted mb-0">{{ info.nama_kelas }} ({{ info.level_bahasa }})</p>

@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% block title %}Hasil Evaluasi AI{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4" style="min-height: 100vh;">
+    <div class="row justify-content-center">
+        <div class="col-12 col-lg-9">
+            
+            <div class="card border-0 shadow-sm rounded-4 text-white p-4 mb-4 overflow-hidden position-relative" style="background: linear-gradient(135deg, #0d6efd, #0043a8);">
+                <i class="fas fa-robot fa-8x position-absolute opacity-10" style="right: -20px; top: -10px;"></i>
+                <div class="row align-items-center">
+                    <div class="col-md-8 mb-3 mb-md-0">
+                        <span class="badge bg-white text-primary rounded-pill px-3 py-1 mb-2 fw-bold">Report Generative AI</span>
+                        <h3 class="fw-bold mb-1">Hasil Evaluasi Kompetensi</h3>
+                        <p class="mb-0 opacity-75">Sistem cerdas AdaptEd telah selesai menganalisis jawabanmu.</p>
+                    </div>
+                    <div class="col-md-4 text-md-end text-center">
+                        <div class="bg-white text-primary rounded-circle d-inline-flex align-items-center justify-content-center shadow" style="width: 100px; height: 100px;">
+                            <h2 class="fw-bold mb-0">{{ skor_akhir }}</h2>
+                        </div>
+                        <div class="mt-2 small fw-bold opacity-75">NILAI RATA-RATA</div>
+                    </div>
+                </div>
+            </div>
+
+            <h5 class="fw-bold text-dark mb-3"><i class="fas fa-list-check text-primary me-2"></i>Rincian Analisis AI</h5>
+            
+            {% if hasil_analisis %}
+                {% for h in hasil_analisis %}
+                <div class="card border-0 shadow-sm rounded-4 bg-white mb-3">
+                    <div class="card-body p-4">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div>
+                                {% if h.tipe_soal == 'reading' %}
+                                    <span class="badge bg-info text-dark rounded-pill px-3 mb-2"><i class="fas fa-book-reader me-1"></i> Reading</span>
+                                {% elif h.tipe_soal == 'listening' %}
+                                    <span class="badge bg-warning text-dark rounded-pill px-3 mb-2"><i class="fas fa-headphones me-1"></i> Listening</span>
+                                {% elif h.tipe_soal == 'speaking' %}
+                                    <span class="badge bg-success rounded-pill px-3 mb-2"><i class="fas fa-microphone me-1"></i> Speaking</span>
+                                {% elif h.tipe_soal == 'writing' %}
+                                    <span class="badge bg-primary rounded-pill px-3 mb-2"><i class="fas fa-pen-nib me-1"></i> Writing</span>
+                                {% endif %}
+                                <h6 class="fw-bold text-dark mb-0">{{ h.pertanyaan }}</h6>
+                            </div>
+                            <div class="ms-3 text-center flex-shrink-0">
+                                <h4 class="fw-bold text-{{ 'success' if h.skor_ai >= 80 else 'warning' if h.skor_ai >= 60 else 'danger' }} mb-0">{{ h.skor_ai }}</h4>
+                                <small class="text-muted" style="font-size: 10px;">SKOR AI</small>
+                            </div>
+                        </div>
+
+                        <div class="bg-light rounded-3 p-3 mb-3 border">
+                            <span class="small text-muted d-block mb-1 fw-bold">Jawaban Anda:</span>
+                            {% if h.tipe_soal == 'speaking' %}
+                                <span class="text-dark fst-italic">"[Rekaman Suara Audio Tersimpan]"</span>
+                            {% else %}
+                                <span class="text-dark">{{ h.jawaban }}</span>
+                            {% endif %}
+                        </div>
+
+                        <div class="rounded-3 p-3" style="background-color: #f8f9ff; border-left: 4px solid #0d6efd;">
+                            <span class="small text-primary d-block mb-1 fw-bold"><i class="fas fa-magic me-1"></i> AI Feedback:</span>
+                            <span class="text-dark small">{{ h.feedback_ai }}</span>
+                        </div>
+
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="alert alert-warning text-center">Data hasil analisis AI tidak ditemukan.</div>
+            {% endif %}
+
+            <div class="text-center mt-4 mb-5">
+                <a href="{{ url_for('daftar_kuis_siswa') }}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold">
+                    <i class="fas fa-arrow-left me-2"></i> Kembali ke Daftar Ujian
+                </a>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -76,15 +76,15 @@
                                     <tr>
                                         <td class="ps-4">
                                             <div class="fw-bold text-dark">{{ m.judul_materi }}</div>
-                                            <span class="badge bg-secondary rounded-pill" style="font-size: 0.65rem;">{{ m.tipe_materi }}</span>
+                                            <span class="badge bg-secondary rounded-pill" style="font-size: 0.65rem;">Modul {{ m.urutan }}</span>
                                         </td>
                                         <td>
                                             <div class="text-muted small fw-bold">{{ m.nama_kelas }}</div>
                                             <div class="small text-primary">Bab / Modul ke-{{ m.urutan }}</div>
                                         </td>
                                         <td>
-                                            {% if m.url_file %}
-                                                <a href="{{ url_for('static', filename='uploads/' ~ m.url_file) }}" target="_blank" class="btn btn-sm btn-light rounded-pill shadow-sm border">
+                                            {% if m.file_pdf %}
+                                                <a href="{{ url_for('static', filename='uploads/' ~ m.file_pdf) }}" target="_blank" class="btn btn-sm btn-light rounded-pill shadow-sm border">
                                                     <i class="fas fa-download text-primary me-1"></i> Lihat File
                                                 </a>
                                             {% else %}

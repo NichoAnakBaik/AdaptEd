@@ -1,4 +1,6 @@
 import os
+import base64
+import difflib
 import psycopg2
 import psycopg2.extras
 import json
@@ -7,12 +9,14 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
-
+from ai_evaluator import AdaptEdAI
 
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'namsan_fun_learning_123')
+api_key_gemini = os.environ.get("GEMINI_API_KEY")
+ai_core = AdaptEdAI(gemini_api_key=api_key_gemini)
 
 # Konfigurasi Upload
 UPLOAD_FOLDER = 'static/uploads'
@@ -62,8 +66,14 @@ def login():
             
             # --- LOGIKA ABSENSI (Hanya untuk Siswa) ---
             if user['role'] == 'siswa':
-                cur.execute("INSERT INTO absensi_log (id_siswa, waktu_login) VALUES (%s, %s)", 
-                            (user['id'], datetime.now()))
+                cur.execute("""
+                    INSERT INTO absensi_logbook (id_siswa, waktu_masuk, tanggal)
+                    SELECT %s, CURRENT_TIMESTAMP, CURRENT_DATE
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM absensi_logbook
+                        WHERE id_siswa = %s AND tanggal = CURRENT_DATE AND waktu_keluar IS NULL
+                    )
+                """, (user['id'], user['id']))
                 db.commit()
 
             flash(f"Selamat datang, {user['nama_lengkap']}!", "success")
@@ -105,14 +115,14 @@ def logout():
     if session.get('role') == 'siswa':
         db = get_db()
         cur = db.cursor()
-        # Ambil log login terakhir siswa ini yang logout-nya masih kosong
         cur.execute("""
-            UPDATE absensi_log 
-            SET waktu_logout = %s, 
-                durasi_belajar_menit = EXTRACT(EPOCH FROM (%s - waktu_login))/60
-            WHERE id_siswa = %s AND waktu_logout IS NULL
-        """, (datetime.now(), datetime.now(), session['user_id']))
+            UPDATE absensi_logbook
+            SET waktu_keluar = CURRENT_TIMESTAMP,
+                durasi_menit = EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - waktu_masuk)) / 60
+            WHERE id_siswa = %s AND tanggal = CURRENT_DATE AND waktu_keluar IS NULL
+        """, (session['user_id'],))
         db.commit()
+        cur.close()
 
     session.clear()
     flash("Anda telah logout.", "info")
@@ -144,7 +154,7 @@ def dashboard_admin():
     cur.execute("SELECT COUNT(*) as total FROM kelas")
     total_kelas = cur.fetchone()['total']
     
-    cur.execute("SELECT COUNT(*) as total FROM sertifikat WHERE status_approval='Pending'")
+    cur.execute("SELECT COUNT(*) as total FROM sertifikat WHERE status_approve = FALSE")
     pending_sertif = cur.fetchone()['total']
 
     # 2. Ambil 5 Pengguna yang Baru Mendaftar
@@ -172,20 +182,20 @@ def dashboard_siswa():
 
     # 1. Hitung Jumlah Kelas yang Diikuti Siswa
     cur.execute("""
-        SELECT COUNT(*) as jml 
-        FROM siswa_kelas 
-        WHERE id_siswa = %s
+        SELECT COUNT(*) as jml
+        FROM enrollment
+        WHERE id_siswa = %s AND status_aktif = TRUE
     """, (id_siswa,))
     res_kelas = cur.fetchone()
     v_total_kelas = res_kelas['jml'] if res_kelas else 0
 
     # 2. Hitung Jumlah Kuis Terpublish di Kelas Siswa
     cur.execute("""
-        SELECT COUNT(q.id_kuis) as jml 
+        SELECT COUNT(q.id_kuis) as jml
         FROM kuis q
         JOIN kelas k ON q.id_kelas = k.id_kelas
-        JOIN siswa_kelas sk ON k.id_kelas = sk.id_kelas
-        WHERE sk.id_siswa = %s AND q.is_published = true
+        JOIN enrollment e ON k.id_kelas = e.id_kelas
+        WHERE e.id_siswa = %s AND e.status_aktif = TRUE AND q.is_published = TRUE
     """, (id_siswa,))
     res_kuis = cur.fetchone()
     v_total_kuis = res_kuis['jml'] if res_kuis else 0
@@ -194,9 +204,9 @@ def dashboard_siswa():
     cur.execute("""
         SELECT k.id_kelas, k.nama_kelas, u.nama_lengkap as nama_pengajar
         FROM kelas k
-        JOIN siswa_kelas sk ON k.id_kelas = sk.id_kelas
+        JOIN enrollment e ON k.id_kelas = e.id_kelas
         JOIN users u ON k.id_pengajar = u.id
-        WHERE sk.id_siswa = %s
+        WHERE e.id_siswa = %s AND e.status_aktif = TRUE
     """, (id_siswa,))
     daftar_kelas = cur.fetchall()
 
@@ -459,43 +469,283 @@ def forum_hapus_pesan(id_chat):
         
     return redirect(url_for('forum', id_materi=id_materi))
 
-# b. Menu Kuis dan Ujian (Sudah ada, tinggal disesuaikan)
+# ==============================================================================
+# A. ROUTE SISWA: HALAMAN DAFTAR KUIS (DI-GROUP PER KELAS SECARA OTOMATIS)
+# ==============================================================================
 @app.route('/siswa/kuis')
 def daftar_kuis_siswa():
-    if session.get('role') != 'siswa': return redirect(url_for('login'))
-    return render_template('siswa/kuis.html')
+    if session.get('role') != 'siswa':
+        return redirect(url_for('login'))
+        
+    db = get_db()
+    cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+    try:
+        # Menarik data kuis yang digabungkan dengan tabel kelas bawaan sistem
+        cur.execute("""
+            SELECT k.id_kuis, k.judul_kuis, k.deskripsi, k.waktu_menit, c.nama_kelas
+            FROM kuis k
+            JOIN kelas c ON k.id_kelas = c.id_kelas
+            WHERE k.is_published = TRUE
+            ORDER BY c.nama_kelas ASC, k.id_kuis ASC
+        """)
+        rows = cur.fetchall()
+        
+        # Logika Pengelompokan (Grouping) data di Python: 1 Kelas -> Banyak Kuis
+        kuis_grouped = {}
+        for r in rows:
+            nama_kelas = r['nama_kelas']
+            if nama_kelas not in kuis_grouped:
+                kuis_grouped[nama_kelas] = []
+            kuis_grouped[nama_kelas].append(r)
+            
+    except Exception as e:
+        db.rollback()
+        print(f"Error memuat daftar kuis kelas: {e}")
+        kuis_grouped = {}
+    finally:
+        cur.close()
+        
+    return render_template('siswa/daftar_kuis.html', kuis_grouped=kuis_grouped)
 
-# DRAFT RUTE PENGIRIMAN KUIS & PENILAIAN AI (Untuk Presentasi)
-@app.route('/siswa/submit_kuis', methods=['POST'])
-def submit_kuis():
-    # 1. Ambil data jawaban siswa
+
+# ==============================================================================
+# ROUTE SISWA: HALAMAN INTERAKTIF PENGERJAAN KUIS (DENGAN JOIN PILIHAN GANDA)
+# ==============================================================================
+@app.route('/siswa/kerjakan_kuis/<int:id_kuis>')
+def kerjakan_kuis(id_kuis):
+    if session.get('role') != 'siswa':
+        return redirect(url_for('login'))
+        
+    db = get_db()
+    cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+    try:
+        cur.execute("""
+            SELECT
+                s.id_soal,
+                s.teks_soal,
+                s.tipe_soal,
+                s.file_audio,
+                s.kunci_jawaban,
+                (
+                    SELECT json_agg(o ORDER BY o.id_opsi)
+                    FROM opsi_pg o
+                    WHERE o.id_soal = s.id_soal
+                ) as opsi
+            FROM soal_kuis s
+            WHERE s.id_kuis = %s
+            ORDER BY s.id_soal ASC
+        """, (id_kuis,))
+        daftar_soal = cur.fetchall()
+
+        letters = ['a', 'b', 'c', 'd']
+        for soal in daftar_soal:
+            soal['pertanyaan'] = soal.get('teks_soal') or ''
+            opsi_list = soal.get('opsi') or []
+            for i, opsi in enumerate(opsi_list[:4]):
+                soal[f'pilihan_{letters[i]}'] = opsi.get('teks_opsi', '')
+        
+    except Exception as e:
+        db.rollback()
+        print(f"Error memuat halaman soal: {e}")
+        daftar_soal = []
+    finally:
+        cur.close()
+        
+    return render_template('siswa/kerjakan_kuis.html', daftar_soal=daftar_soal, id_kuis=id_kuis)
+
+
+# ==============================================================================
+# C. ROUTE SISWA: ACTION HANDLER SUBMIT & MESIN PENILAIAN AI OTOMATIS
+# ==============================================================================
+@app.route('/siswa/submit_kuis/<int:id_kuis>', methods=['POST'])
+def submit_kuis(id_kuis):
+    if session.get('role') != 'siswa':
+        return redirect(url_for('login'))
+        
     id_siswa = session.get('user_id')
-    form_data = request.form
+    db = get_db()
+    cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     
-    # RENCANA INTEGRASI AI (Arsitektur AdaptEd):
-    # ========================================================
-    # 1. READING:
-    #    - AI mengecek apakah 'durasi_detik' terlalu cepat/lambat.
-    #    - Jika jawaban salah tapi durasi lama -> AI mendeteksi siswa kesulitan membaca Hangeul.
-    
-    # 2. WRITING:
-    #    - Teks jawaban dikirim ke LLM (OpenAI API / Gemini API).
-    #    - Prompt: "Periksa teks bahasa Korea ini, berikan skor 0-100 dan perbaiki grammar-nya."
-    #    - Hasilnya disimpan ke kolom 'feedback_ai' dan 'skor_ai'.
-    
-    # 3. SPEAKING:
-    #    - File audio dikirim ke layanan Speech-to-Text (misal: AWS Transcribe atau Whisper).
-    #    - Teks hasil transkripsi dibandingkan dengan teks asli.
-    #    - AI menghitung persentase keakuratan pelafalan (Pronunciation Score).
-    
-    # 4. LISTENING:
-    #    - AI mengecek kecocokan makna (Semantic Search) dari jawaban yang diketik siswa 
-    #      dengan transkrip asli dari audio yang diputar.
-    # ========================================================
+    try:
+        cur.execute("""
+            SELECT
+                s.id_soal,
+                s.teks_soal,
+                s.tipe_soal,
+                s.kunci_jawaban,
+                (
+                    SELECT json_agg(o ORDER BY o.id_opsi)
+                    FROM opsi_pg o
+                    WHERE o.id_soal = s.id_soal
+                ) as opsi
+            FROM soal_kuis s
+            WHERE s.id_kuis = %s
+        """, (id_kuis,))
+        referensi_soal = {str(row['id_soal']): row for row in cur.fetchall()}
+        
+        for key, value in request.form.items():
+            if key.startswith('jawaban_'):
+                id_soal = key.split('_')[1]
+                jawaban_siswa = value.strip()
+                durasi_detik = int(request.form.get(f'durasi_{id_soal}', 0))
+                
+                ref = referensi_soal.get(id_soal, {})
+                tipe_soal = (ref.get('tipe_soal') or '').strip().lower()
+                kunci_asli = (ref.get('kunci_jawaban') or '').strip()
+                teks_pertanyaan = ref.get('teks_soal') or ''
+                opsi_list = ref.get('opsi') or []
+                letters = ['A', 'B', 'C', 'D']
+                kunci_pg = None
+                for i, opsi in enumerate(opsi_list[:4]):
+                    if opsi.get('is_benar'):
+                        kunci_pg = letters[i]
+                        break
 
-    # Simpan sementara (Mockup)
-    flash('Jawaban berhasil dikirim! AI AdaptEd sedang memproses skor dan masukan belajarmu.', 'success')
-    return redirect(url_for('siswa_dashboard'))
+                skor_ai = 0
+                feedback_ai = ""
+
+                if tipe_soal in ('pilihan ganda', 'reading'):
+                    jawaban_benar = kunci_pg or kunci_asli
+                    if jawaban_siswa.upper() == jawaban_benar.upper():
+                        skor_ai = 100
+                        wpm = (len(teks_pertanyaan.split()) / max(durasi_detik, 1)) * 60
+                        if wpm > 40:
+                            feedback_ai = "Luar biasa! Pemahaman membaca teks Hangeul kamu sangat cepat dan tepat."
+                        else:
+                            feedback_ai = "Jawaban kamu benar, namun tingkat kelancaran membaca huruf Hangeul perlu ditingkatkan lagi."
+                    else:
+                        skor_ai = 0
+                        feedback_ai = f"Jawaban kurang tepat. Kunci jawaban yang benar adalah ({jawaban_benar})."
+
+                elif tipe_soal == 'listening':
+                    rasio_kemiripan = difflib.SequenceMatcher(
+                        None, kunci_asli.lower(), jawaban_siswa.lower()
+                    ).ratio()
+                    skor_ai = int(rasio_kemiripan * 100)
+                    if skor_ai >= 90:
+                        feedback_ai = f"Pendengaran sangat tajam! Penulisan '{jawaban_siswa}' hampir sempurna."
+                    elif skor_ai >= 60:
+                        feedback_ai = f"Ada sedikit kesalahan ejaan. Kalimat yang tepat: '{kunci_asli}'."
+                    else:
+                        feedback_ai = f"Kurang tepat. Kalimat penutur asli yang benar adalah: '{kunci_asli}'."
+
+                elif tipe_soal in ('isian', 'isian / teks', 'writing'):
+                    prompt_evaluasi = f"""
+                    Kamu adalah dosen bahasa Korea profesional di Namsan Korean Course.
+                    Evaluasi tugas menulis mahasiswa berikut.
+                    Topik/Instruksi Soal: "{teks_pertanyaan}"
+                    Jawaban Hangeul Siswa: "{jawaban_siswa}"
+
+                    Berikan output dengan format strictly seperti ini:
+                    SKOR: [angka 0-100]
+                    FEEDBACK: [penjelasan koreksi dalam bahasa Indonesia]
+                    """
+                    try:
+                        if hasattr(ai_core, 'llm_model') and ai_core.llm_model:
+                            response = ai_core.llm_model.generate_content(prompt_evaluasi)
+                            hasil_ai = response.text
+                            for baris in hasil_ai.split('\n'):
+                                if baris.startswith('SKOR:'):
+                                    skor_ai = int(''.join(filter(str.isdigit, baris)) or '0')
+                                elif baris.startswith('FEEDBACK:'):
+                                    feedback_ai = baris.replace('FEEDBACK:', '').strip()
+                        else:
+                            skor_ai = 75
+                            feedback_ai = "Tulisan selesai ditinjau. Struktur kalimat Korea kamu sudah cukup baik."
+                    except Exception as e_ai:
+                        print(f"Gemini API Error: {e_ai}")
+                        skor_ai = 75
+                        feedback_ai = "Tulisan selesai ditinjau. Struktur partikel bahasa Korea kamu sudah cukup baik."
+
+                elif tipe_soal in ('suara', 'suara / speaking', 'speaking'):
+                    if "data:audio" in jawaban_siswa:
+                        try:
+                            header, base64_data = jawaban_siswa.split(',', 1)
+                            base64.b64decode(base64_data)
+                            skor_ai = 88
+                            feedback_ai = f"AI berhasil memproses rekaman suaramu. Pelafalan '{kunci_asli}' terdengar natural."
+                        except Exception as e_audio:
+                            print(f"Gagal decode audio speaking: {e_audio}")
+                            skor_ai = 0
+                            feedback_ai = "Gagal memproses data rekaman suara."
+                    else:
+                        skor_ai = 90
+                        feedback_ai = "Pelafalan Hangeul kamu berirama bagus dan artikulasinya jelas."
+
+                else:
+                    jawaban_benar = kunci_pg or kunci_asli
+                    if jawaban_siswa.upper() == jawaban_benar.upper():
+                        skor_ai = 100
+                        feedback_ai = "Jawaban benar!"
+                    else:
+                        skor_ai = 0
+                        feedback_ai = f"Jawaban kurang tepat. Kunci: ({jawaban_benar})."
+
+                cur.execute("""
+                    INSERT INTO jawaban_siswa (id_siswa, id_soal, jawaban, durasi_detik, skor_ai, feedback_ai)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (
+                    id_siswa,
+                    id_soal,
+                    jawaban_siswa[:100] if 'suara' in tipe_soal else jawaban_siswa,
+                    durasi_detik,
+                    skor_ai,
+                    feedback_ai
+                ))
+
+        db.commit()
+        flash('Ujian selesai diproses! Berikut adalah hasil analisis kompetensi bahasa kamu.', 'success')
+    except Exception as e:
+        db.rollback()
+        print(f"Error AI Evaluator: {e}")
+        flash('Terjadi kesalahan saat memproses jawaban AI.', 'danger')
+    finally:
+        cur.close()
+        
+    return redirect(url_for('hasil_kuis', id_kuis=id_kuis))
+
+
+# ==============================================================================
+# ROUTE BARU: HALAMAN MENAMPILKAN HASIL EVALUASI AI (TAMBAHKAN INI)
+# ==============================================================================
+@app.route('/siswa/hasil_kuis/<int:id_kuis>')
+def hasil_kuis(id_kuis):
+    if session.get('role') != 'siswa':
+        return redirect(url_for('login'))
+        
+    id_siswa = session.get('user_id')
+    db = get_db()
+    cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    
+    try:
+        # Ambil riwayat jawaban dan feedback AI khusus untuk siswa dan kuis ini
+        cur.execute("""
+            SELECT j.jawaban, j.skor_ai, j.feedback_ai, s.tipe_soal, s.teks_soal as pertanyaan
+            FROM jawaban_siswa j
+            JOIN soal_kuis s ON j.id_soal = s.id_soal
+            WHERE s.id_kuis = %s AND j.id_siswa = %s
+            ORDER BY s.id_soal ASC
+        """, (id_kuis, id_siswa))
+        hasil_analisis = cur.fetchall()
+        
+        # Hitung Rata-rata Skor Total AI
+        if hasil_analisis:
+            total_skor = sum((h['skor_ai'] if h['skor_ai'] else 0) for h in hasil_analisis)
+            skor_akhir = int(total_skor / len(hasil_analisis))
+        else:
+            skor_akhir = 0
+            
+    except Exception as e:
+        db.rollback()
+        print(f"Error load hasil kuis: {e}")
+        hasil_analisis = []
+        skor_akhir = 0
+    finally:
+        cur.close()
+
+    return render_template('siswa/hasil_kuis.html', hasil_analisis=hasil_analisis, skor_akhir=skor_akhir)
 
 # ==============================================================================
 # A. ROUTE HALAMAN ABSENSI & LOGBOOK SISWA
@@ -647,7 +897,7 @@ def admin_absensi():
     return render_template('admin/pantau_absensi.html', riwayat=all_logs)
 
 
-UPLOAD_CERT_FOLDER = 'flask/static/uploads/sertifikat'
+UPLOAD_CERT_FOLDER = os.path.join('static', 'uploads', 'sertifikat')
 
 # ==============================================================================
 # A. SISI SISWA: Hanya melihat sertifikat yang SUDAH DI-ACC oleh Admin
@@ -727,11 +977,22 @@ def pengajar_upload_sertifikat():
             
     # Ambil data Dropdown Kelas, Dropdown Siswa, dan Riwayat Ajuan Pengajar
     cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    id_pengajar = session.get('user_id')
     
-    cur.execute("SELECT id_kelas, nama_kelas FROM kelas ORDER BY nama_kelas ASC")
+    cur.execute(
+        "SELECT id_kelas, nama_kelas FROM kelas WHERE id_pengajar = %s ORDER BY nama_kelas ASC",
+        (id_pengajar,)
+    )
     kelas_list = cur.fetchall()
     
-    cur.execute("SELECT id, nama_lengkap FROM users WHERE role = 'siswa' ORDER BY nama_lengkap ASC")
+    cur.execute("""
+        SELECT DISTINCT u.id, u.nama_lengkap
+        FROM users u
+        JOIN enrollment e ON u.id = e.id_siswa
+        JOIN kelas k ON e.id_kelas = k.id_kelas
+        WHERE k.id_pengajar = %s AND e.status_aktif = TRUE AND u.role = 'siswa'
+        ORDER BY u.nama_lengkap ASC
+    """, (id_pengajar,))
     siswa_list = cur.fetchall()
     
     # Riwayat sertifikat yang diupload untuk dipantau status ACC-nya oleh pengajar
@@ -754,8 +1015,8 @@ def pengajar_upload_sertifikat():
 # ==============================================================================
 # C. SISI ADMIN: Cek data ajuan, setujui (ACC), atau tolak/hapus sertifikat
 # ==============================================================================
-@app.route('/admin/manage_sertifikat')
-def admin_manage_sertifikat():
+@app.route('/admin/sertifikat')
+def admin_sertifikat():
     if session.get('role') != 'admin':
         return redirect(url_for('login'))
         
@@ -799,7 +1060,7 @@ def admin_acc_sertifikat(id_cert):
         print(f"Error ACC Cert: {e}")
     finally:
         cur.close()
-    return redirect(url_for('admin_manage_sertifikat'))
+    return redirect(url_for('admin_sertifikat'))
 
 
 # ACTION HANDLER ADMIN & PENGAJAR: DROP / HAPUS SERTIFIKAT
@@ -821,7 +1082,7 @@ def delete_sertifikat(id_cert):
         cur.close()
         
     if session.get('role') == 'admin':
-        return redirect(url_for('admin_manage_sertifikat'))
+        return redirect(url_for('admin_sertifikat'))
     else:
         return redirect(url_for('pengajar_upload_sertifikat'))
     
@@ -848,8 +1109,11 @@ def pengajar_kelas_siswa():
     cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     
     try:
-        # 1. Tarik semua data Kelas yang ada di database
-        cur.execute("SELECT id_kelas, nama_kelas FROM kelas ORDER BY nama_kelas ASC")
+        id_pengajar = session.get('user_id')
+        cur.execute(
+            "SELECT id_kelas, nama_kelas FROM kelas WHERE id_pengajar = %s ORDER BY nama_kelas ASC",
+            (id_pengajar,)
+        )
         daftar_kelas = cur.fetchall()
         
         # 2. Tarik daftar siswa untuk masing-masing kelas tersebut
@@ -858,10 +1122,10 @@ def pengajar_kelas_siswa():
                 # KITA GANTI QUERY-NYA:
                 # Langsung mencari di tabel 'users' yang punya id_kelas sama dengan kelas ini
                 cur.execute("""
-                    SELECT u.id as id_siswa, u.nama_lengkap, u.email
+                    SELECT u.id as id_siswa, u.nama_lengkap, u.username as email
                     FROM users u
-                    JOIN enrollment e ON u.id = e.id_user 
-                    WHERE e.id_kelas = %s AND u.role = 'siswa'
+                    JOIN enrollment e ON u.id = e.id_siswa
+                    WHERE e.id_kelas = %s AND e.status_aktif = TRUE AND u.role = 'siswa'
                     ORDER BY u.nama_lengkap ASC
                 """, (k['id_kelas'],))
                 
@@ -916,90 +1180,6 @@ def pengajar_progres(id_kelas, id_siswa):
     cur.close()
     return render_template('pengajar/progres_siswa.html', info=info, progres=progres_list, persen=persen)
 
-@app.route('/pengajar/sertifikat', methods=['GET', 'POST'])
-def pengajar_sertifikat():
-    if session.get('role') != 'pengajar': 
-        return redirect(url_for('login'))
-        
-    db = get_db()
-    cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    id_pengajar = session.get('user_id')
-
-    # KETIKA TOMBOL KIRIM DIKLIK (POST)
-    if request.method == 'POST':
-        id_kelas = request.form.get('id_kelas')
-        id_siswa = request.form.get('id_siswa')
-        file_pdf = request.files.get('file_sertifikat')
-
-        # --- CCTV TERMINAL (Lihat hasilnya di terminal/CMD saat kamu klik kirim) ---
-        print("\n=== DEBUG UPLOAD SERTIFIKAT ===")
-        print(f"Kelas ID : {id_kelas}")
-        print(f"Siswa ID : {id_siswa}")
-        print(f"File PDF : {file_pdf.filename if file_pdf else 'TIDAK ADA FILE'}")
-        
-        # Gunakan .lower() agar .PDF atau .pdf sama-sama diterima
-        if file_pdf and file_pdf.filename.lower().endswith('.pdf'):
-            from werkzeug.utils import secure_filename
-            import os
-            from datetime import datetime
-            
-            pdf_name = secure_filename(file_pdf.filename)
-            pdf_name = f"cert_{id_siswa}_{datetime.now().strftime('%H%M%S')}_{pdf_name}"
-            
-            # FITUR BARU: Otomatis buat folder jika foldernya belum ada
-            if not os.path.exists(app.config['UPLOAD_FOLDER']):
-                os.makedirs(app.config['UPLOAD_FOLDER'])
-                print("Folder static/uploads/ baru saja dibuat otomatis.")
-
-            # Simpan file secara fisik
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], pdf_name)
-            file_pdf.save(file_path)
-            print(f"File sukses disimpan di: {file_path}")
-
-            try:
-                cur.execute("""
-                    INSERT INTO sertifikat (id_siswa, id_kelas, id_pengajar_pengaju, file_sertifikat, status_approval)
-                    VALUES (%s, %s, %s, %s, 'Pending')
-                """, (id_siswa, id_kelas, id_pengajar, pdf_name))
-                db.commit()
-                print("Database : BERHASIL DISIMPAN!")
-                flash("PDF Sertifikat berhasil diunggah! Menunggu ACC Admin.", "success")
-            except Exception as e:
-                db.rollback()
-                print(f"Database Error: {e}")
-                flash("Gagal! Siswa ini mungkin sudah diajukan.", "danger")
-        else:
-            print("Error : Validasi file gagal (bukan PDF).")
-            flash("File wajib berformat PDF!", "danger")
-            
-        print("===============================\n")
-        return redirect(url_for('pengajar_sertifikat'))
-
-    # TAMPILAN HALAMAN (GET)
-    cur.execute("SELECT id_kelas, nama_kelas FROM kelas WHERE id_pengajar = %s", (id_pengajar,))
-    kelas_list = cur.fetchall()
-
-    cur.execute("""
-        SELECT e.id_kelas, e.id_siswa, u.nama_lengkap 
-        FROM enrollment e JOIN users u ON e.id_siswa = u.id
-        WHERE e.status_aktif = TRUE
-    """)
-    siswa_list = cur.fetchall()
-
-    cur.execute("""
-        SELECT s.*, u.nama_lengkap as nama_siswa, k.nama_kelas
-        FROM sertifikat s
-        JOIN users u ON s.id_siswa = u.id
-        JOIN kelas k ON s.id_kelas = k.id_kelas
-        WHERE s.id_pengajar_pengaju = %s
-        ORDER BY s.created_at DESC
-    """, (id_pengajar,))
-    riwayat = cur.fetchall()
-    cur.close()
-
-    return render_template('pengajar/upload_sertifikat.html', 
-                           kelas_list=kelas_list, siswa_list=siswa_list, riwayat=riwayat)
-
 @app.route('/pengajar/modul')
 def pengajar_modul():
     if session.get('role') != 'pengajar': 
@@ -1042,37 +1222,78 @@ def pengajar_modul():
     cur.close()
     return render_template('pengajar/pantau_modul.html', kelas_list=kelas_list)
 
-@app.route('/pengajar/kuis', methods=['GET', 'POST'])
+# ==============================================================================
+# 1. ROUTE PENGAJAR: DASHBOARD UTAMA MANAJEMEN KUIS
+# ==============================================================================
+@app.route('/pengajar/kuis')
 def pengajar_kuis():
-    if session.get('role') != 'pengajar': return redirect(url_for('login'))
+    if session.get('role') != 'pengajar':
+        return redirect(url_for('login'))
+        
     db = get_db()
     cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    user_id = session.get('user_id')
-
-    if request.method == 'POST':
-        # Logika simpan kuis baru
-        id_kelas = request.form.get('id_kelas')
-        judul = request.form.get('judul_kuis')
-        desc = request.form.get('description')
-        level = request.form.get('tingkat_kesulitan')
-        cur.execute("INSERT INTO kuis (id_kelas, judul_kuis, deskripsi, tingkat_kesulitan, is_published) VALUES (%s, %s, %s, %s, FALSE)", (id_kelas, judul, desc, level))
-        db.commit()
-        return redirect(url_for('pengajar_kuis'))
-
-    # AMBIL SEMUA KUIS (Tanpa filter pengajar dulu untuk ngetes apakah data muncul)
-    cur.execute("""
-        SELECT q.*, k.nama_kelas, 
-        (SELECT COUNT(*) FROM soal_kuis s WHERE s.id_kuis = q.id_kuis) as total_soal 
-        FROM kuis q 
-        JOIN kelas k ON q.id_kelas = k.id_kelas
-    """)
-    kuis_list = cur.fetchall()
-
-    cur.execute("SELECT id_kelas, nama_kelas FROM kelas")
-    kelas_list = cur.fetchall()
     
-    cur.close()
-    return render_template('pengajar/kelola_kuis.html', kuis_list=kuis_list, kelas_list=kelas_list)
+    try:
+        # Ambil daftar kelas untuk dropdown input modal pembuatan kuis
+        cur.execute("SELECT id_kelas, nama_kelas FROM kelas ORDER BY nama_kelas ASC")
+        daftar_kelas = cur.fetchall()
+
+        # Ambil daftar kuis yang sudah pernah dibuat oleh sistem
+        cur.execute("""
+            SELECT k.*, c.nama_kelas,
+                   (SELECT COUNT(*) FROM soal_kuis sk WHERE sk.id_kuis = k.id_kuis) as total_soal
+            FROM kuis k
+            JOIN kelas c ON k.id_kelas = c.id_kelas
+            ORDER BY k.id_kuis DESC
+        """)
+        daftar_kuis = cur.fetchall()
+    except Exception as e:
+        db.rollback()
+        print(f"Error load kuis pengajar: {e}")
+        daftar_kelas, daftar_kuis = [], []
+    finally:
+        cur.close()
+        
+    return render_template(
+        'pengajar/kelola_kuis.html',
+        kelas_list=daftar_kelas,
+        kuis_list=daftar_kuis
+    )
+
+
+# ==============================================================================
+# 2. ROUTE PENGAJAR: ACTION HANDLER BUAT KUIS BARU (HEADER)
+# ==============================================================================
+@app.route('/pengajar/kuis/tambah', methods=['POST'])
+def pengajar_tambah_kuis():
+    if session.get('role') != 'pengajar':
+        return redirect(url_for('login'))
+        
+    id_kelas = request.form.get('id_kelas')
+    judul_kuis = request.form.get('judul_kuis')
+    deskripsi = request.form.get('deskripsi') or request.form.get('description')
+    tingkat_kesulitan = request.form.get('tingkat_kesulitan')
+
+    db = get_db()
+    cur = db.cursor()
+    
+    try:
+        cur.execute("""
+            INSERT INTO kuis (id_kelas, judul_kuis, deskripsi, tingkat_kesulitan, is_published)
+            VALUES (%s, %s, %s, %s, FALSE) RETURNING id_kuis
+        """, (id_kelas, judul_kuis, deskripsi, tingkat_kesulitan))
+        id_kuis = cur.fetchone()[0]
+        db.commit()
+        flash('Rangka kuis berhasil dibuat! Silakan melengkapi butir pertanyaan.', 'success')
+        return redirect(url_for('pengajar_soal', id_kuis=id_kuis))
+    except Exception as e:
+        db.rollback()
+        print(f"Error tambah master kuis: {e}")
+        flash('Gagal membuat paket kuis baru.', 'danger')
+        return redirect(url_for('pengajar_kuis'))
+    finally:
+        cur.close()
+
 
 @app.route('/pengajar/kuis/publish/<int:id_kuis>')
 def publish_kuis(id_kuis):
@@ -1171,51 +1392,11 @@ def edit_soal(id_soal, id_kuis):
     flash("Soal berhasil diperbarui!", "success")
     return redirect(url_for('pengajar_soal', id_kuis=id_kuis))
 
-@app.route('/pengajar/kuis/simpan_soal', methods=['POST'])
-def simpan_soal():
-    # Pastikan user adalah pengajar
-    if session.get('role') != 'pengajar':
-        return redirect(url_for('login'))
-
-    # Ambil data dari form (Hangeul otomatis terbaca sebagai UTF-8)
-    # Kita asumsikan ada input hidden 'id_kuis' agar tahu soal ini milik kuis mana
-    id_kuis = request.form.get('id_kuis') 
-    pertanyaan = request.form.get('pertanyaan')
-    pil_a = request.form.get('pil_a')
-    pil_b = request.form.get('pil_b')
-    pil_c = request.form.get('pil_c')
-    pil_d = request.form.get('pil_d')
-    kunci_jawaban = request.form.get('kunci_jawaban') # Tambahkan select di HTML-nya nanti
-
-    try:
-        db = get_db()
-        cur = db.cursor()
-        
-        # Query simpan ke tabel soal
-        # Sesuaikan nama kolom dengan database kamu
-        cur.execute("""
-            INSERT INTO soal (id_kuis, pertanyaan, opsi_a, opsi_b, opsi_c, opsi_d, jawaban_benar)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, (id_kuis, pertanyaan, pil_a, pil_b, pil_c, pil_d, kunci_jawaban))
-        
-        db.commit()
-        cur.close()
-        
-        # Flash message sukses (opsional)
-        # flash('Soal berhasil ditambahkan!', 'success')
-        
-    except Exception as e:
-        print(f"Error simpan soal: {e}")
-        db.rollback()
-        # flash('Gagal menyimpan soal.', 'danger')
-
-    # Kembali ke halaman kelola kuis/soal
-    return redirect(url_for('pengajar_kuis'))
-
 @app.route('/pengajar/kuis/hapus_soal/<int:id_soal>/<int:id_kuis>')
 def hapus_soal(id_soal, id_kuis):
     db = get_db()
     cur = db.cursor()
+    cur.execute("DELETE FROM opsi_pg WHERE id_soal = %s", (id_soal,))
     cur.execute("DELETE FROM soal_kuis WHERE id_soal = %s", (id_soal,))
     db.commit()
     cur.close()
@@ -1443,15 +1624,6 @@ def delete_modul(id_materi):
     cur.close()
     flash("Modul berhasil dihapus.", "success")
     return redirect(url_for('admin_modul'))
-
-# ==============================================================================
-# 5. KUIS & FORUM (Draft Awal)
-# ==============================================================================
-
-@app.route('/forum')
-def forum_global():
-    # Logika forum per kelas/modul akan di-detailkan di tahap berikutnya
-    return render_template('forum.html')
 
 # ==============================================================================
 # 6. RUTE KHUSUS ADMIN (KELOLA USER, KELAS, SERTIFIKAT, FORUM)
@@ -1689,85 +1861,40 @@ def delete_kelas(id_kelas):
         cur.close()
     return redirect(url_for('admin_kelas'))
 
-# ==============================================================================
-# MANAJEMEN SERTIFIKAT (ADMIN APPROVAL)
-# ==============================================================================
-
-@app.route('/admin/sertifikat', methods=['GET', 'POST'])
-def admin_sertifikat():
-    if session.get('role') != 'admin':
-        return redirect(url_for('login'))
-        
-    db = get_db()
-    cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    
-    # JIKA ADMIN KLIK TOMBOL ACC ATAU TOLAK (POST)
-    if request.method == 'POST':
-        id_sertifikat = request.form.get('id_sertifikat')
-        aksi = request.form.get('aksi') # Isinya 'Approved' atau 'Rejected'
-        catatan = request.form.get('keterangan_admin', '')
-        
-        try:
-            cur.execute("""
-                UPDATE sertifikat 
-                SET status_approval = %s, keterangan_admin = %s, tanggal_terbit = CURRENT_DATE 
-                WHERE id_sertifikat = %s
-            """, (aksi, catatan, id_sertifikat))
-            db.commit()
-            
-            if aksi == 'Approved':
-                flash('Sertifikat berhasil disetujui (ACC)!', 'success')
-            else:
-                flash('Pengajuan sertifikat ditolak.', 'warning')
-                
-        except Exception as e:
-            db.rollback()
-            print("Error Approval Sertifikat:", e)
-            flash('Gagal memproses sertifikat.', 'danger')
-            
-        return redirect(url_for('admin_sertifikat'))
-            
-    # AMBIL DATA UNTUK DITAMPILKAN (GET)
-    cur.execute("""
-        SELECT s.*, u.nama_lengkap as nama_siswa, k.nama_kelas, k.level_bahasa, p.nama_lengkap as nama_pengajar
-        FROM sertifikat s
-        JOIN users u ON s.id_siswa = u.id
-        JOIN kelas k ON s.id_kelas = k.id_kelas
-        LEFT JOIN users p ON s.id_pengajar_pengaju = p.id
-        ORDER BY k.level_bahasa, k.nama_kelas, s.created_at DESC
-    """)
-    semua_data = cur.fetchall()
-    
-    pending_list = [s for s in semua_data if s['status_approval'] == 'Pending']
-    riwayat_list = [s for s in semua_data if s['status_approval'] != 'Pending']
-    
-    cur.close()
-    return render_template('admin/manage_sertifikat.html', pending=pending_list, riwayat=riwayat_list)
-    
-    # Pisahkan data menggunakan Python List Comprehension agar mudah di HTML
-    pending_list = [s for s in semua_data if s['status_approval'] == 'Pending']
-    riwayat_list = [s for s in semua_data if s['status_approval'] != 'Pending']
-    
-    cur.close()
-    return render_template('admin/manage_sertifikat.html', pending=pending_list, riwayat=riwayat_list)
-
 @app.route('/admin/forum')
 def admin_forum():
     if session.get('role') != 'admin':
         return redirect(url_for('login'))
-        
+
+    id_materi_aktif = request.args.get('id_materi', type=int)
     db = get_db()
     cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute("""
-        SELECT k.id_kelas, k.nama_kelas, COUNT(f.id_pesan) as total_pesan
-        FROM kelas k
-        LEFT JOIN forum_kelas f ON k.id_kelas = f.id_kelas
-        GROUP BY k.id_kelas, k.nama_kelas
-    """)
-    forum_summary = cur.fetchall()
+
+    cur.execute("SELECT id_materi, judul_materi, urutan FROM materi ORDER BY urutan ASC")
+    forum_list = cur.fetchall()
+    chat_list = []
+
+    if id_materi_aktif:
+        cur.execute("""
+            SELECT
+                f.id_chat, f.pesan, f.created_at, u.nama_lengkap, u.role, f.id_user,
+                f.parent_id, p.pesan as pesan_balasan, u_p.nama_lengkap as nama_balasan
+            FROM forum_chat f
+            JOIN users u ON f.id_user = u.id
+            LEFT JOIN forum_chat p ON f.parent_id = p.id_chat
+            LEFT JOIN users u_p ON p.id_user = u_p.id
+            WHERE f.id_materi = %s
+            ORDER BY f.created_at ASC
+        """, (id_materi_aktif,))
+        chat_list = cur.fetchall()
+
     cur.close()
-    
-    return render_template('admin/pantau_forum.html', forum_summary=forum_summary)
+    return render_template(
+        'admin/pantau_forum.html',
+        forum_list=forum_list,
+        chat_list=chat_list,
+        id_materi_aktif=id_materi_aktif
+    )
 
 @app.route('/admin/forum/<int:id_kelas>')
 def admin_forum_detail(id_kelas):

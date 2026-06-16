@@ -395,6 +395,16 @@ transition: background-color 0.15s ease, box-shadow 0.15s ease;
 .chat-bubble .bubble-actions { opacity: 0; transition: opacity 0.15s ease; }
 .chat-bubble:hover .bubble-actions { opacity: 1 !important; }
 
+.my-chat {
+    background-color: #e2efff;
+    border-top-right-radius: 0;
+}
+
+.other-chat {
+    background-color: #ffffff;
+    border-top-left-radius: 0;
+}
+
 .with-reply-align-end {
     align-items: flex-end !important;
 }
@@ -417,4 +427,154 @@ transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 .table tr:last-child td {
     border-bottom: none;
+}
+
+/* ========================================= */
+/* RESPONSIVE MOBILE & UX SETTINGS           */
+/* ========================================= */
+
+/* Sidebar Settings untuk Layar HP */
+@media (max-width: 991.98px) {
+    .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease-in-out;
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        z-index: 1050;
+        width: 260px;
+    }
+    .sidebar.active {
+        transform: translateX(0);
+    }
+    .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+        padding-top: 80px !important; /* Ruang untuk header mobile */
+    }
+}
+
+/* Mobile Top Header (Hanya Muncul di HP) */
+.mobile-header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 60px;
+    background-color: #0d6efd;
+    z-index: 1040;
+    display: none;
+    align-items: center;
+    padding: 0 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+}
+@media (max-width: 991.98px) {
+    .mobile-header { display: flex; }
+}
+
+/* Efek Gelap (Overlay) Saat Sidebar HP Terbuka */
+.sidebar-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 1045;
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+.sidebar-overlay.active {
+    display: block;
+    opacity: 1;
+}
+
+/* Layar Loading Refresh Otomatis */
+#globalLoader {
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(4px);
+    z-index: 9999;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+}
+
+/* Layout Spesifik Forum untuk Responsif */
+.forum-container {
+    position: fixed;
+    bottom: 0; right: 0;
+    top: 60px; left: 260px;
+    overflow: hidden; z-index: 10;
+    border-top: 1px solid #dee2e6;
+}
+@media (max-width: 991.98px) {
+    .forum-container {
+        left: 0 !important; /* Penuhi layar HP */
+    }
+}
+
+/* ============================================================== */
+/* RESPONSIVE MOBILE & LOADER (WARNA MENGIKUTI TEMA UTAMAMU)      */
+/* ============================================================== */
+
+.mobile-header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 60px;
+    /* Memakai variabel dari CSS-mu, jika tidak ada, fallback ke Dark Grey */
+    background-color: var(--theme-color, #212529); 
+    z-index: 1040;
+    display: none;
+    align-items: center;
+    padding: 0 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+}
+
+/* Setelan Layar HP */
+@media (max-width: 991.98px) {
+    .mobile-header { display: flex; }
+    .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease-in-out;
+        position: fixed;
+        top: 0; left: 0;
+        height: 100vh;
+        z-index: 1050;
+        width: 260px;
+    }
+    .sidebar.active { transform: translateX(0); }
+    .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+        padding-top: 60px !important; /* Memberi ruang agar tidak tertutup header HP */
+    }
+}
+
+/* Efek Gelap Background saat Menu HP Terbuka */
+.sidebar-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 1045;
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+.sidebar-overlay.active { display: block; opacity: 1; }
+
+/* Layar Animasi Loading Mulus */
+#globalLoader {
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(4px);
+    z-index: 9999;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+}
+.spinner-theme {
+    /* Warna loading disamakan dengan warna dark/tema milikmu */
+    color: var(--theme-color, #212529) !important; 
 }
