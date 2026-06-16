@@ -1,6 +1,6 @@
 # Abaikan folder virtual environment lokal
 vm/
-flask/vm/
+api/vm/
 .virtualenvs/
 
 # Abaikan cache Python & file sementara
@@ -12,8 +12,8 @@ __pycache__/
 
 # Abaikan folder upload lokal (Vercel menggunakan /tmp)
 static/uploads/
-flask/static/uploads/
-flask/uploads/
+api/static/uploads/
+api/uploads/
 
 # Abaikan file database lokal (jika ada)
 databases/
